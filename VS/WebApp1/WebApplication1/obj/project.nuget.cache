@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "uRqUtlAFy6ahhW4YvWKrMbIM16TgrocRcwlFwM3ZPJ3byhrrr79P+bcUVISnyeP1PEEC5BfEgw9g2uti4F0wgw==",
+  "success": true,
+  "projectFilePath": "D:\\GHRep\\VS\\WebApp1\\WebApplication1\\WebApplication1.fsproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\steph\\.nuget\\packages\\fsharp.core\\4.7.2\\fsharp.core.4.7.2.nupkg.sha512"
+  ],
+  "logs": []
+}

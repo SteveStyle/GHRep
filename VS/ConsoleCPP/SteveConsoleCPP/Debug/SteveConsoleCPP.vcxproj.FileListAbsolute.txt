@@ -1,0 +1,2 @@
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\Debug\SteveConsoleCPP.exe
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\Debug\SteveConsoleCPP.pdb

@@ -1,0 +1,4 @@
+﻿1>------ Build started: Project: ConsoleApplication1, Configuration: Debug Win32 ------
+1>Assembling addtwo2.asm...
+1>ConsoleApplication1.vcxproj -> D:\GHRep\VS\ConsoleCPP\ConsoleApplication1\Debug\ConsoleApplication1.exe
+========== Build: 1 succeeded, 0 failed, 0 up-to-date, 0 skipped ==========

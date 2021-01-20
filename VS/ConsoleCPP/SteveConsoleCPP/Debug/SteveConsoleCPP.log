@@ -1,0 +1,15 @@
+﻿  SteveConsoleCPP.cpp
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(1,9): error C3927: '->': trailing return type is not allowed after a non-function declarator
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(1,9): error C3484: syntax error: expected '->' before the return type
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(1,10): error C3613: missing return type after '->' ('int' assumed)
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(1,10): error C2143: syntax error: missing ';' before 'asm'
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(1,10): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(1,14): error C2059: syntax error: '-'
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(2,11): error C2143: syntax error: missing ';' before 'constant'
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(2,11): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(9,1): error C3927: '->': trailing return type is not allowed after a non-function declarator
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(9,1): error C3484: syntax error: expected '->' before the return type
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(10,1): error C3613: missing return type after '->' ('int' assumed)
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(10,1): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\addtwo.asm(9,2): error C2146: syntax error: missing ';' before identifier 'code'
+D:\GHRep\VS\ConsoleCPP\SteveConsoleCPP\SteveConsoleCPP.cpp(23,9): error C3861: 'power2': identifier not found

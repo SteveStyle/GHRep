@@ -1,0 +1,2 @@
+D:\GHRep\VS\ConsoleCPP\ConsoleApplication1\Debug\ConsoleApplication1.exe
+D:\GHRep\VS\ConsoleCPP\ConsoleApplication1\Debug\ConsoleApplication1.pdb
