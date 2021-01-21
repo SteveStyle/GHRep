@@ -1,5 +1,6 @@
 # built in modules
-import json
+import json, itertools
+from pprint import pprint 
 # downloaded packages.  use 'pip install requests'
 import requests
 # projet modules (none yet)
@@ -41,16 +42,19 @@ class CwowAPI:
     self.uri_api = "https://" + domain + ".api.blizzard.com/"
 
   def getData( self, api, params ):
-    api_connected_realm_index = "/data/wow/connected-realm/index"
+    apiIndex = {}
+    apiIndex["connected-realm"] = "data/wow/connected-realm/index"
+    apiIndex["realm"]="data/wow/realm/index"
+#    api_connected_realm_index = "/data/wow/connected-realm/index"
+    
 #    con_realms = requests.get(formatRequest(uri_api+api_connected_realm_index,self.MainParams))
-    ret = requests.get(formatRequest(self.uri_api+api_connected_realm_index,self.MainParams))
+    #ret = requests.get(formatRequest(self.uri_api+api_connected_realm_index,self.MainParams))
+    ret = requests.get(formatRequest(self.uri_api+apiIndex[api],self.MainParams))
     print(ret)
-    return ret
+    return ret.json()
     
 def formatRequest( uri, params ):
   ret = uri
-#  if len(params)>0:
-#    ret += "?"
   delim = "?"
   for n, v in params.items():
     ret += "{}{}={}".format(delim,n,v)
@@ -58,6 +62,10 @@ def formatRequest( uri, params ):
   print("formatRequest returns",ret)
   return ret
 
+def getValueFromList( dict, name_name, name_value, value_name ):
+  for d in dict:
+    if d[name_name] == name_value:
+      return d[value_name]
 
 
 #params = '?'+p_ns+'&'+p_locale+'&'+'access_token='+token
@@ -67,8 +75,26 @@ wowAPI = CwowAPI( client_id, client_secret, "eu", "en_GB" )
 
 api_connected_realm_index = "/data/wow/connected-realm/index"
 
-con_realms = wowAPI.getData( api_connected_realm_index, {} )
+con_realms = wowAPI.getData( "connected-realm", {} )
 
-print (con_realms.json())
+#print (con_realms.json())
 
+realms = wowAPI.getData("realm",{})
 
+i = 0
+for v in realms["realms"]:
+  pprint( v["name"] )
+  i += 1
+  if (i>2):
+    break
+    
+print( getValueFromList( realms["realms"], "name", "Aszune", "slug" ) )
+
+#pprint(realms.json())
+#pprint( dict(itertools.islice(realms.json().items(), 3)))
+
+#import itertools
+
+#d = {1: 2, 3: 4, 5: 6}
+
+#dict(itertools.islice(d.items(), 2))
