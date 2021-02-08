@@ -1,13 +1,24 @@
 use std::fmt;
 
-struct Structure(i32);
+#[derive(Debug)]
+struct List(Vec<i32>);
 
-impl fmt::Display for Structure {
-    fn fmt( &self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0)
+impl fmt::Display for List {
+    fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
+        let vec = &self.0;
+        write!(f, "[")?;
+        for (count, value) in vec.iter().enumerate() {
+            if count != 0 { write!(f, ", ")?; }
+            write!(f, "{}: {}", count, value)?;
+        }
+        write!(f, "]")
     }
-}    
+}
 
 fn main() {
-    println!("*{:>5}*", Structure(3));
+    
+    let l = List(vec![1, 2, 3]);
+    
+    println!("Display is {}", l);
+    println!("Debug is {:?}", l);
 }
