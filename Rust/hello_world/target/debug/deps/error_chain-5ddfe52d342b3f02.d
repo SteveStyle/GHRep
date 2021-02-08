@@ -1,0 +1,11 @@
+D:\ghrep\rust\hello_world\target\debug\deps\error_chain-5ddfe52d342b3f02.rmeta: C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\lib.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_error.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\error_chain.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_main.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\example_generated.rs
+
+D:\ghrep\rust\hello_world\target\debug\deps\liberror_chain-5ddfe52d342b3f02.rlib: C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\lib.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_error.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\error_chain.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_main.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\example_generated.rs
+
+D:\ghrep\rust\hello_world\target\debug\deps\error_chain-5ddfe52d342b3f02.d: C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\lib.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_error.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\error_chain.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_main.rs C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\example_generated.rs
+
+C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\lib.rs:
+C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_error.rs:
+C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\error_chain.rs:
+C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\quick_main.rs:
+C:\Users\steph\.cargo\registry\src\github.com-1ecc6299db9ec823\error-chain-0.10.0\src\example_generated.rs:
