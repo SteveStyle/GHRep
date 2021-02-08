@@ -5,91 +5,159 @@ from pprint import pprint
 import requests
 # projet modules (none yet)
 
+apiIndex = {}
+apiIndex["connected-realm"] = "data/wow/connected-realm/index"
+apiIndex["realm"]="data/wow/realm/index"
+
 
 class CwowAPI:
   def __init__( self, client_id, client_secret, domain, locale ):
 
 # connect to wow and get a token
-    
-# domain should be eu
     uri_token = "https://" + domain + ".battle.net/oauth/token"
     
     LoginParams = {}
     LoginParams["grant_type"]="client_credentials"
+    self.ns = "namespace=dynamic-" + domain     #eu
+    self.locale = "locale=" + locale            #en_GB"
 
-#    grant_type = "grant_type=client_credentials"
-
-#    p_ns = "namespace=dynamic-eu"
-    self.ns = "namespace=dynamic-" + domain
-    
-    self.locale = "locale=" + locale #en_GB"
-
-#    resp = requests.get(uri_token+'?'+p_grant_type, auth=(client_id,client_secret))
-    resp = requests.get(formatRequest(uri_token,LoginParams), auth=(client_id,client_secret))
-    
-    print("get token response is ", resp)
-
+    resp = requests.get("{}{}".format(uri_token,formatParams(LoginParams, "na")), auth=(client_id,client_secret))
     self.token = resp.json()["access_token"]
     
-    self.MainParams = {}
-    self.MainParams["locale"]=locale
-    self.MainParams["namespace"]="dynamic-" + domain
-    self.MainParams["access_token"] = self.token
+    MainParams = {}
+    MainParams["locale"]=locale
+    MainParams["access_token"] = self.token
+    MainParams["namespace"]=domain  #"dynamic-" + domain
+    self.apiParamsDyn = formatParams( MainParams, "{}{}=dynamic-{}" )
+    self.apiParamsStatic = formatParams( MainParams, "{}{}=static-{}" )
+    self.apiParamsMin = formatParams( MainParams, "" )
 
     print("token is \n",self.token)
     
 # set up other values    
-    self.uri_api = "https://" + domain + ".api.blizzard.com/"
+    self.uri_api = "https://" + domain + ".api.blizzard.com/data/wow/"
 
-  def getData( self, api, params ):
-    apiIndex = {}
-    apiIndex["connected-realm"] = "data/wow/connected-realm/index"
-    apiIndex["realm"]="data/wow/realm/index"
-#    api_connected_realm_index = "/data/wow/connected-realm/index"
+  def getData( self, api, rootname ):
+    rqst = "{}{}/index{}".format(self.uri_api,api,self.apiParamsDyn)
+    print( "rqst =",rqst)
+    print( "rootname =",rootname )
+    ret = requests.get(rqst)
+    print("getData ret=",ret)
+    return ret.json()[rootname]
     
-#    con_realms = requests.get(formatRequest(uri_api+api_connected_realm_index,self.MainParams))
-    #ret = requests.get(formatRequest(self.uri_api+api_connected_realm_index,self.MainParams))
-    ret = requests.get(formatRequest(self.uri_api+apiIndex[api],self.MainParams))
-    print(ret)
+  def getValue( self, api, rootname, keyname, keyvalue, value_name  ):
+    ret = requests.get("{}{}/index{}".format(self.uri_api,api,self.apiParamsDyn))
+    print("getValue ret=",ret)
+    for d in ret.json()[rootname]:
+      if d[keyname] == keyvalue:
+        return d[value_name]
+        
+  def getDetails( self, api, keyvalue ):
+    rqst = "{}{}/{}{}".format(self.uri_api,api,keyvalue,self.apiParamsDyn)
+    print( "rqst =",rqst)
+    ret = requests.get(rqst)
+    print("getDetails ret=",ret)
+    pprint( ret.json() )
     return ret.json()
     
-def formatRequest( uri, params ):
-  ret = uri
-  delim = "?"
-  for n, v in params.items():
-    ret += "{}{}={}".format(delim,n,v)
+
+  def getRealmSlug( self, realm ):
+    return self.getValue( "realm", "realms", "name", realm, "slug" )
+    
+  def getConnectedRealmAuction( self, realm ):
+    slug = self.getRealmSlug( realm )
+    realm_details = self.getDetails( "realm", slug )
+    con_realm_link = realm_details["connected_realm"]["href"]
+    print( con_realm_link )
+    rqst = "{}{}".format( con_realm_link, self.apiParamsMin )
+    ret = requests.get( rqst )
+    auction_link = ret.json()["auctions"]["href"]
+    rqst = "{}{}".format( auction_link, self.apiParamsMin )
+    ret = requests.get( rqst )
+    print( "getConnectedRealm ret=", ret )
+    return ret.json()["auctions"]
+    
+  def getItems( self ):
+    rqst = "{}{}/index{}".format(self.uri_api,"item-class",self.apiParamsStatic)
+    print( "rqst =",rqst)
+    ret = requests.get(rqst)
+    print("getItems ret=",ret)
+    classes = ret.json()["item_classes"]
+    for rec in classes:
+      class_name = rec["name"]
+      class_id = rec["id"]
+      class_rqst = "{}{}".format( rec["key"]["href"], self.apiParamsMin )
+      class_ret = requests.get( class_rqst )
+      
+    return ret.json()
+    
+  def describeRecords( self, api, rootname ):
+    data = self.getData( api, rootname )
+    for rec in data[:3]:
+      pprint( rec )
+      for n, v in rec.items():
+        print( n )
+    return
+
+  def describeData( self, api ):
+    d = requests.get("{}{}/index{}".format(self.uri_api,api,self.apiParamsDyn)).json()
+    for n, v in d.items():
+      print( n )
+    return
+
+# def formatParams( params ):
+  # ret = ""
+  # delim = "?"
+  # for n, v in params.items():
+    # ret += "{}{}={}".format(delim,n,v)
+    # delim = "&"
+  # return ret
+
+# def formatParamsMin( params ):
+  # ret = ""
+  # delim = "&"
+  # for n, v in params.items():
+    # if n != "namespace":
+      # ret += "{}{}={}".format(delim,n,v)
+  # return ret
+
+def formatParams( params, ns_format ):
+  ret = ""
+  if ns_format == "":
     delim = "&"
-  print("formatRequest returns",ret)
+  else:
+    delim = "?"
+  for n, v in params.items():
+    if n != "namespace":
+      ret += "{}{}={}".format(delim,n,v)
+    else:
+      ret += ns_format.format(delim,n,v)
+    delim = "&"
   return ret
 
-def getValueFromList( dict, name_name, name_value, value_name ):
-  for d in dict:
-    if d[name_name] == name_value:
-      return d[value_name]
-
-
-#params = '?'+p_ns+'&'+p_locale+'&'+'access_token='+token
 client_id = "86d4174c00ab47dd821410a7476f7232"
 client_secret = "X5Guj3ghYzMIsijNUGqmYJmXKAFhHeas"
 wowAPI = CwowAPI( client_id, client_secret, "eu", "en_GB" )
 
 api_connected_realm_index = "/data/wow/connected-realm/index"
 
-con_realms = wowAPI.getData( "connected-realm", {} )
+wowAPI.describeData( "connected-realm" )
+wowAPI.describeRecords( "connected-realm", "connected_realms" )
+wowAPI.describeData( "realm" )
+wowAPI.describeRecords( "realm", "realms" )
+wowAPI.getDetails( "realm", "aszune" )
+print( wowAPI.getRealmSlug( "Aszune" ) )
 
-#print (con_realms.json())
+d = wowAPI.getConnectedRealmAuction( "Aszune" )
 
-realms = wowAPI.getData("realm",{})
+with open('file.txt', 'w') as file:
+     file.write(json.dumps(d))
 
-i = 0
-for v in realms["realms"]:
-  pprint( v["name"] )
-  i += 1
-  if (i>2):
-    break
-    
-print( getValueFromList( realms["realms"], "name", "Aszune", "slug" ) )
-
+for rec in d[:2]:
+  pprint( rec )
+  
+  
+pprint( wowAPI.getItems() )
 #pprint(realms.json())
 #pprint( dict(itertools.islice(realms.json().items(), 3)))
 
