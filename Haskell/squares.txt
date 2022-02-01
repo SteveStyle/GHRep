@@ -1,5 +1,0 @@
-squares :: [Integer]
-
-squares' :: Integer -> [Integer]
-squares' n = (n * n) : squares' (n+1)
-
