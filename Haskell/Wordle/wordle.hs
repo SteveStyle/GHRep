@@ -15,7 +15,7 @@ data Guess =   Guess String [ResponseNode] Int Float -- guess, target list, max 
 data Strategy = Strategy [String] 
   deriving (Show)
   
-DepthLimit = 2
+-- DepthLimit = 2
 
 
 
@@ -36,10 +36,9 @@ guess2ResponseNodeList xs n y = [ ResponseNode (the z) (targetList2GuessList x n
                                 , then group by z using groupWith 
                                 ]
 
-
+-- target list -> depth -> list of guess nodes
 targetList2GuessList :: [String] -> Int -> [Guess]
 targetList2GuessList [t] n = [GuessLeaf t]
-targetList2GuessList ts  n = [ Guess g (guess2ResponseNodeList ts (n-1) g 0 0
+targetList2GuessList ts  n = [ Guess g (guess2ResponseNodeList ts (n+1) g) 0 0
                              | g <- guessList
                              ]
-
