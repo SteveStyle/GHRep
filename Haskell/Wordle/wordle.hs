@@ -1,27 +1,22 @@
 {-# LANGUAGE TransformListComp #-}
 module Wordle where
+import WordleData
 import WordleTestWord
 import GHC.Exts
 
-targetList :: [String]
-targetList = ["ALLOY", "PILOT", "QUERY", "ENTRY", "ALLAY", "STING",
-              "PLUCK", "QUEEN", "WRECK", "CRANK", "SHEEP", "HIRED", 
-              "WIRED", "FRIED", "SORRY", "HEARD", "PUSHY", "LIMBO",
-              "TARED", "TARES", "LUCKY", "FLUKE", "FLAKE", "CLICK",
-              "DADDY", "MUMMY", "MUSHY", "SWELL", "SWINE", "COULD",
-              "TEARY", "SOLID", "CLUCK", "DIDDY", "WOUND", "WOULD",
-              "SAUCE", "SALSA", "GREEN", "DRAKE", "FIRED", "SPEAK",
-              "TIMED", "VIOLA", "RAISE", "PRISE", "PAUSE", "PARTY"
-             ]
+data ResponseNode = ResponseNode TestResult [Guess]
+  deriving(Show)
 
-guessList :: [String]
-guessList = targetList
+data Guess =   Guess String [ResponseNode] Int Float -- guess, target list, max depth, mean depth
+             | GuessLeaf String
+  deriving (Show)
 
-data Guess = Guess String [String] Int Float -- guess, target list, max depth, mean depth
 
 data Strategy = Strategy [String] 
   deriving (Show)
   
+DepthLimit = 2
+
 
 
 -- target list -> test word -> ( pattern, number of targets, list of targets )
@@ -33,4 +28,18 @@ testWordtoTargets xs y = [ ( the z, length x, x )
                          , then sortWith by (length x)                           
                          ]
 
+-- target list -> depth -> guess -> response node list
+guess2ResponseNodeList :: [String] -> Int -> String -> [ ResponseNode ]
+guess2ResponseNodeList xs n y = [ ResponseNode (the z) (targetList2GuessList x n)
+                                | x <- xs
+                                , z <- [testWord y x ]
+                                , then group by z using groupWith 
+                                ]
+
+
+targetList2GuessList :: [String] -> Int -> [Guess]
+targetList2GuessList [t] n = [GuessLeaf t]
+targetList2GuessList ts  n = [ Guess g (guess2ResponseNodeList ts (n-1) g 0 0
+                             | g <- guessList
+                             ]
 
