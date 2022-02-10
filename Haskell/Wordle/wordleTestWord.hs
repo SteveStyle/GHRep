@@ -2,9 +2,18 @@ module WordleTestWord where
 import WordleUtils
 
 data CharResult = CrFALSE | CrMISMATCH | CrTRUE | CrUNKNOWN
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
+  
+instance Show CharResult where
+  show CrFALSE    = "_"
+  show CrMISMATCH = "M"
+  show CrTRUE     = "T"
+  show CrUNKNOWN  = "U"
 
 type TestResult = [CharResult] -- list of five responses
+
+--instance Show TestResult where
+--  show ts = concat [ show x | x <- ts ]
 
 testWord :: String -> String -> TestResult
 testWord xs ys = testMismatch xs (testExact xs ys)

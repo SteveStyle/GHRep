@@ -25,3 +25,5 @@ targetList = targetListSmall
 
 guessList :: [String]
 guessList = guessListSmall
+
+testList = ["AWAKE","ABATE","ABASE","AGATE","SLAVE","AGAPE","STALE","INANE","EXALT","PLACE","STAGE","SLATE","AMAZE","PLANE","ENACT","USAGE","SPACE","PLATE","STAKE","KNAVE","SKATE","BLAZE","SUAVE","QUAKE","ELATE","OVATE","SNAKE","SCALE","FLAME","FLAKE","STAVE","STATE","GLAZE","IMAGE","EXACT","EMAIL","BLAME"]
