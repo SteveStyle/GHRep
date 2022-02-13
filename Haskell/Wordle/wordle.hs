@@ -1,7 +1,11 @@
 {-# LANGUAGE TransformListComp #-}
-module Wordle where
+module Main where
 
 import WordleSolve
 import WordleData
 import WordleTest
+
+main :: IO()
+main = print mostSelective'
+
 

@@ -9,6 +9,17 @@ instance Show CharResult where
   show CrMISMATCH = "M"
   show CrTRUE     = "T"
   show CrUNKNOWN  = "U"
+  
+s2cr :: String -> [CharResult]
+s2cr [] = []
+s2cr ('_':xs) = CrFALSE: (s2cr xs)
+s2cr (' ':xs) = CrFALSE: (s2cr xs)
+s2cr ('M':xs) = CrMISMATCH: (s2cr xs)
+s2cr ('O':xs) = CrMISMATCH: (s2cr xs)
+s2cr ('T':xs) = CrTRUE: (s2cr xs)
+s2cr ('G':xs) = CrTRUE: (s2cr xs)
+s2cr ('U':xs) = CrUNKNOWN: (s2cr xs)
+  
 
 type TestResult = [CharResult] -- list of five responses
 
@@ -22,7 +33,7 @@ testWord xs ys = testMismatch xs (testExact xs ys)
     -- test string -> target string -> ( amended target, result list )
     testExact :: String -> String -> (String, TestResult)
     testExact [] _ = ( [], [] )
-    testExact (x:xs) (y:ys) | (x==y) = ( as, CrTRUE:bs )
+    testExact (x:xs) (y:ys) | (x==y)    = ( as, CrTRUE:bs )
                             | otherwise = ( y:as, CrUNKNOWN:bs )
               where (as,bs) = testExact xs ys
 

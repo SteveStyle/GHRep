@@ -1,14 +1,14 @@
 {-# LANGUAGE TransformListComp #-}
 module WordleSolve where
+
 import WordleData
 import WordleTestWord
+import WordleUtils
+
 import GHC.Exts
 import Data.Maybe
 
 type Level = Int
-
-showList' :: Show a => [a] -> String
-showList' xs = foldl (\x y -> (x ++ (show y))) "" xs
 
 data ResponseNode = ResponseNode Level TestResult [Guess]
   --deriving(Show)
@@ -31,7 +31,7 @@ instance Show Guess where
 data Strategy = Strategy [String] 
   deriving (Show)
   
-depthLimit = 3
+depthLimit = 4
 
 
 
@@ -41,7 +41,7 @@ testWordtoTargets xs y = [ ( the z, length x, x )
                          | x <- xs
                          , z <- [testWord y x ]
                          , then group by z using groupWith 
-                         , then sortWith by (length x)                           
+                         , then sortWith by (- length x)                           
                          ]
 
 -- target list -> depth -> guess -> response node list
