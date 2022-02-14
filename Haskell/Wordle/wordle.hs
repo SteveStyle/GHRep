@@ -7,5 +7,5 @@ import WordleTest
 
 main :: IO()
 main = print mostSelective'
-
+ 
 

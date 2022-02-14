@@ -1,5 +1,7 @@
 module WordleTestWord where
 import WordleUtils
+import Control.DeepSeq
+
 
 data CharResult = CrFALSE | CrMISMATCH | CrTRUE | CrUNKNOWN
   deriving (Eq, Ord)
@@ -9,6 +11,10 @@ instance Show CharResult where
   show CrMISMATCH = "M"
   show CrTRUE     = "T"
   show CrUNKNOWN  = "U"
+  
+instance NFData CharResult where
+  rnf cr = ()
+  
   
 s2cr :: String -> [CharResult]
 s2cr [] = []
