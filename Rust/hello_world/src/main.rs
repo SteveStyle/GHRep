@@ -1,6 +1,6 @@
 fn main () {
-    let sentance = String::from("hello world");
-    let fw = first_word(&sentance);
+    let sentence = String::from("hello world");
+    let fw = first_word(&sentence);
     println!("function returned {}", fw);
 }
     

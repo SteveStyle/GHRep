@@ -27,22 +27,15 @@ showMaybeGuessList (Just gs) = show $ head $ gs
 
 
 
-test1 = MaybeGuessList ( targetList2GuessList targetList 0
+test1' = MaybeGuessList ( targetList2GuessList targetList 0
                        )
 
-
--- target list -> test word -> ( pattern, number of targets, list of targets )
-testWordSel :: [String] -> String -> Int
-testWordSel xs y = maximum [ length x
-                           | x <- xs
-                           , let z = testWord y x
-                           , then group by z using groupWith 
-                           ]
 
 
 parMap' :: Int -> (a -> b) -> [a] -> [b]
 parMap' _ _ [] = []
 parMap' n f xs = concat $ parMap rpar (map f) (splitEvery n xs)
+--parMap' n f xs = concat $ parMap rpar (force $ map f) (splitEvery n xs)
 
 
 -- parMap' :: Int -> (a -> b) -> [a] -> [b]
@@ -56,17 +49,21 @@ parMap' n f xs = concat $ parMap rpar (map f) (splitEvery n xs)
                              -- return (a:bs)
                         -- )
 
+
+
+mostSelective' = mostSelective'' targetListFull guessListFull
+
 -- result calculated and stored in WordleData
-mostSelective' :: [(Int, String)]
-mostSelective' = take 100 $ sort $ filter (\(n,_) -> (n<200)) unsortedList
+mostSelective'' :: [String] -> [String] -> [(Int, String)]
+mostSelective'' ts gs = take 100 $ sort $ filter (\(n,_) -> (n<200)) unsortedList
                  where
-                 getMaxCount :: [String] -> String -> (Int,String)
-                 getMaxCount ts g = force( ( (testWordSel ts g) ,g ) )
+
+--                 getMaxCount ts g = force( ( (testWordSel ts g) ,g ) )
                  
---                 unsortedList = parMap' 100 (getMaxCount targetListFull) guessListFull
+                 unsortedList = parMap' 10 (maxCount ts) gs
 
 
-                 unsortedList = parMap rpar (getMaxCount targetListFull) guessListFull
+--                 unsortedList = parMap rpar (getMaxCount targetListFull) guessListFull
                          
 -- mostSelective' = take 100 $ [  (g, n)
                          -- | g <- guessListFull
@@ -76,11 +73,6 @@ mostSelective' = take 100 $ sort $ filter (\(n,_) -> (n<200)) unsortedList
                          -- ]
                          
 
-responses :: String -> [CharResult] -> [String]
-responses g rs = [ x 
-                 | x <- targetListFull
-                 , testWord g x  == rs
-                 ]
 
 resp x = responses "REAIS" $ s2cr x
 
