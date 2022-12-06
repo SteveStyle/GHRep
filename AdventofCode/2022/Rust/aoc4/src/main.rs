@@ -1,3 +1,5 @@
+use aoc4::*;
+
 fn main() {
-    println!("Hello, world!");
+    show_totals();
 }
