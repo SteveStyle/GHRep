@@ -1,6 +1,8 @@
 // this is a library
 use std::fs;
-use std::cmp;
+use crate::position::position::*;
+
+mod position;
 
 pub fn show_totals() {
     const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input9.txt";
@@ -13,120 +15,98 @@ pub fn show_totals() {
     println!("The part 2 total score is {}.",total_score);
 }
 
-#[derive(Default)]
-struct Forest { grid : Vec<Vec<u32>> }
 
-impl Forest {
-
-    pub fn from_string( contents: &str) -> Forest {
-        let mut forest = Forest{ grid: vec![] };
-        for line in contents.lines() {
-            let line = line.trim();
-            let mut row : Vec<u32> = vec![];
-            for c in line.chars() {
-                if let Some(d) = c.to_digit(10) {
-                    row.push(d);
-                } else {
-                    panic!("could not convert character {} to a digit in line {}",c,line)
-                }
-            }
-            forest.grid.push(row);
-        }
-        return forest;
-    }
-
-    // is the tree visible in a particular direction
-    fn is_visible( value: u32, list : &[u32] ) -> bool {
-        return list.iter().fold(true, |acc, x| {acc && cmp::Ordering::Greater == value.cmp(x)});
-    }
+fn get_head_move(line: &str) -> (Pos, i32) {
+    let line = line.trim();
+    let parts: Vec<&str> = line.split_whitespace().collect();
     
-    fn is_visible_all( &self, row : usize, col : usize ) ->bool {
-        let tree_height = &self.grid[row][col];
-        let left  = &self.grid[row][..col];
-        let right = &self.grid[row][col+1..];
-        let up_rows= &self.grid[..row];
-        let up : Vec<u32> = up_rows.iter().map(|x| x[col]).collect();
-        let down_rows = &self.grid[row+1..];
-        let down : Vec<u32> = down_rows.iter().map(|x| x[col]).collect();
-
-        return  Forest::is_visible( *tree_height, left)  || 
-                Forest::is_visible( *tree_height, right) || 
-                Forest::is_visible( *tree_height, &up)   || 
-                Forest::is_visible( *tree_height, &down);
-    }
-
-    fn count_visible( &self ) -> usize {
-        let mut total = 0;
-        let no_rows = self.grid.len();
-        let no_cols = self.grid[0].len();
-        for row in 0..no_rows {
-            for col in 0..no_cols {
-                if self.is_visible_all(row, col) {
-                    total += 1;
-                }
-            }
-        }
-        return total;
-    }
-
-    fn count_visible2(value: u32, list : Vec<u32> ) -> usize {
-        let mut cnt = 0;
-        for i in list {
-            cnt += 1;
-            if i >= value {break;}
-        }
-        return cnt;
-    }
-
-    fn count_visible_all( &self, row : usize, col : usize ) -> usize {
-        let tree_height = &self.grid[row][col];
-        let mut left  = self.grid[row][..col].to_vec();
-        left.reverse();
-        let right = self.grid[row][col+1..].to_vec();
-        let up_rows= &self.grid[..row];
-        let mut up : Vec<u32> = up_rows.iter().map(|x| x[col]).collect();
-        up.reverse();
-        let down_rows = &self.grid[row+1..];
-        let down : Vec<u32> = down_rows.iter().map(|x| x[col]).collect();
-
-        return  Forest::count_visible2( *tree_height, left)  * 
-                Forest::count_visible2( *tree_height, right) * 
-                Forest::count_visible2( *tree_height, up)   * 
-                Forest::count_visible2( *tree_height, down);
-    }
-
-    fn most_visible( &self ) -> usize {
-        let mut total = 0;
-        let mut mrow = 0;
-        let mut mcol = 0;
-        let no_rows = self.grid.len();
-        let no_cols = self.grid[0].len();
-        for row in 0..no_rows {
-            for col in 0..no_cols {
-                let no_visible = self.count_visible_all(row, col);
-                if no_visible > total {
-                    total = no_visible;
-                    mrow = row;
-                    mcol = col;
-                }
-            }
-        }
-        println!("most found was {} at row {} and column {}", total, mrow, mcol);
-
-        return total;
-    }
-
+    let n = parts[1]; 
+    let n : i32  = n.parse::<i32>().unwrap();
+    
+    let c = parts[0]; 
+    let pos = match c {
+        "R" => Pos{x:1,y:0},
+        "L" => Pos{x:-1,y:0},
+        "U" => Pos{x:0,y:1},
+        "D" => Pos{x:0,y:-1},
+        _   => panic!("character {} is not R,L,U or D",c),
+    };
+    return(pos,n);
 }
 
+#[derive(Debug)]
+struct HistoryItem {
+    h_head_move: Pos, 
+    h_head: Pos,
+    h_tail: Pos 
+}
+
+use std::fmt;
+
+impl fmt::Display for HistoryItem {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "head_move=({}, {}) head=({}, {}) tail=({}, {})", self.h_head_move.x, self.h_head_move.y, self.h_head.x, self.h_head.y, self.h_tail.x, self.h_tail.y)
+    }
+}
+
+#[derive(Debug)]
+struct History {
+    history_items : Vec<HistoryItem>,
+}
+
+impl fmt::Display for History {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.history_items.iter().fold(Ok(()), |result, history_item| {
+            result.and_then(|_| writeln!(f, "{}", history_item))
+        })
+    }
+}
+
+
 fn process_file_contents( contents: &str) -> usize {
-    let forest = Forest::from_string(contents);
-    return forest.count_visible();
-    
+    let mut head = Pos{x:0,y:0};
+    let mut tail = Pos{x:0,y:0};
+    let mut tail_positions : Vec<Pos> = vec![tail];
+    let mut history  = History{history_items: vec![]};
+    for line in contents.lines() {
+        let (head_move, n) = get_head_move(line);
+        for i in 0..n {
+            head += head_move;
+            tail = Pos::move_tail(&head, &tail);
+            tail_positions.push(tail);
+            history.history_items.push(HistoryItem { h_head_move: head_move, h_head: head, h_tail: tail });
+        }
+    }
+    println!("history {}",history);
+    tail_positions.sort();
+    tail_positions.dedup();
+    println!("tail positions {:?}",tail_positions);
+    return tail_positions.len();
 }
 
 fn process_file_contents2( contents: &str) -> usize {
-    let forest = Forest::from_string(contents);
-    return forest.most_visible();
+    let mut head = Pos{x:0,y:0};
+    let mut tails: Vec<Pos> = vec![Pos{x:0,y:0};9];
+    assert_eq!(tails.len(),9);
+    let mut tail_positions : Vec<Pos> = vec![tails[8]];
+    let mut history  = History{history_items: vec![]};
+    for line in contents.lines() {
+        let (head_move, n) = get_head_move(line);
+        for i in 0..n {
+            head += head_move;
+            tails[0] = Pos::move_tail(&head, &tails[0]);
+            for i in 1..9 {
+                tails[i] = Pos::move_tail(&tails[i-1], &tails[i]);
+            }
+            tail_positions.push(tails[8]);
+            history.history_items.push(HistoryItem { h_head_move: head_move, h_head: head, h_tail: tails[8] });
+        }
+    }
+    println!("history {}",history);
+    tail_positions.sort();
+    tail_positions.dedup();
+    println!("tail positions {:?}",tail_positions);
+    return tail_positions.len();
 }
 
 
@@ -138,31 +118,41 @@ mod tests {
     
     #[test]
     fn test_process_file_contents() {
-        assert_eq!(process_file_contents("30373
-        25512
-        65332
-        33549
-        35390"), 21);
+        assert_eq!(process_file_contents("R 4
+        U 4
+        L 3
+        D 1
+        R 4
+        D 1
+        L 5
+        R 2"), 13);
     }
 
     #[test]
     fn test_process_file_contents2() {
-        assert_eq!(process_file_contents2("30373
-        25512
-        65332
-        33549
-        35390"), 8);
+        assert_eq!(process_file_contents2("R 4
+        U 4
+        L 3
+        D 1
+        R 4
+        D 1
+        L 5
+        R 2"), 1);
     }
 
     #[test]
-    fn test_most_visible() {
-
-        assert_eq!(process_file_contents2("30373
-        25512
-        65332
-        33549
-        35390"), 8);
+    fn test_process_file_contents2_1() {
+        assert_eq!(process_file_contents2("R 5
+        U 8
+        L 8
+        D 3
+        R 17
+        D 10
+        L 25
+        U 20"), 36);
     }
+
+
 
 }
 
