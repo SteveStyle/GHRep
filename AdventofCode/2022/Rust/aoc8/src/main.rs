@@ -1,4 +1,4 @@
-use aoc7::*;
+use aoc8::*;
 
 fn main() {
     show_totals();

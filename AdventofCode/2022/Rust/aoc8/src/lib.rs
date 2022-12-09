@@ -1,10 +1,9 @@
 // this is a library
 use std::fs;
-use crate::directory::directory::*;
-pub mod directory;
+use std::cmp;
 
 pub fn show_totals() {
-    const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input7.txt";
+    const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input8.txt";
    
     let content = fs::read_to_string(FILE_PATH)
         .expect(&format!("I was not able to read the file {}.",FILE_PATH));
@@ -14,68 +13,120 @@ pub fn show_totals() {
     println!("The part 2 total score is {}.",total_score);
 }
 
+#[derive(Default)]
+struct Forest { grid : Vec<Vec<u32>> }
 
+impl Forest {
 
+    pub fn from_string( contents: &str) -> Forest {
+        let mut forest = Forest{ grid: vec![] };
+        for line in contents.lines() {
+            let line = line.trim();
+            let mut row : Vec<u32> = vec![];
+            for c in line.chars() {
+                if let Some(d) = c.to_digit(10) {
+                    row.push(d);
+                } else {
+                    panic!("could not convert character {} to a digit in line {}",c,line)
+                }
+            }
+            forest.grid.push(row);
+        }
+        return forest;
+    }
+
+    // is the tree visible in a particular direction
+    fn is_visible( value: u32, list : &[u32] ) -> bool {
+        return list.iter().fold(true, |acc, x| {acc && cmp::Ordering::Greater == value.cmp(x)});
+    }
+    
+    fn is_visible_all( &self, row : usize, col : usize ) ->bool {
+        let tree_height = &self.grid[row][col];
+        let left  = &self.grid[row][..col];
+        let right = &self.grid[row][col+1..];
+        let up_rows= &self.grid[..row];
+        let up : Vec<u32> = up_rows.iter().map(|x| x[col]).collect();
+        let down_rows = &self.grid[row+1..];
+        let down : Vec<u32> = down_rows.iter().map(|x| x[col]).collect();
+
+        return  Forest::is_visible( *tree_height, left)  || 
+                Forest::is_visible( *tree_height, right) || 
+                Forest::is_visible( *tree_height, &up)   || 
+                Forest::is_visible( *tree_height, &down);
+    }
+
+    fn count_visible( &self ) -> usize {
+        let mut total = 0;
+        let no_rows = self.grid.len();
+        let no_cols = self.grid[0].len();
+        for row in 0..no_rows {
+            for col in 0..no_cols {
+                if self.is_visible_all(row, col) {
+                    total += 1;
+                }
+            }
+        }
+        return total;
+    }
+
+    fn count_visible2(value: u32, list : Vec<u32> ) -> usize {
+        let mut cnt = 0;
+        for i in list {
+            cnt += 1;
+            if i >= value {break;}
+        }
+        return cnt;
+    }
+
+    fn count_visible_all( &self, row : usize, col : usize ) -> usize {
+        let tree_height = &self.grid[row][col];
+        let mut left  = self.grid[row][..col].to_vec();
+        left.reverse();
+        let right = self.grid[row][col+1..].to_vec();
+        let up_rows= &self.grid[..row];
+        let mut up : Vec<u32> = up_rows.iter().map(|x| x[col]).collect();
+        up.reverse();
+        let down_rows = &self.grid[row+1..];
+        let down : Vec<u32> = down_rows.iter().map(|x| x[col]).collect();
+
+        return  Forest::count_visible2( *tree_height, left)  * 
+                Forest::count_visible2( *tree_height, right) * 
+                Forest::count_visible2( *tree_height, up)   * 
+                Forest::count_visible2( *tree_height, down);
+    }
+
+    fn most_visible( &self ) -> usize {
+        let mut total = 0;
+        let mut mrow = 0;
+        let mut mcol = 0;
+        let no_rows = self.grid.len();
+        let no_cols = self.grid[0].len();
+        for row in 0..no_rows {
+            for col in 0..no_cols {
+                let no_visible = self.count_visible_all(row, col);
+                if no_visible > total {
+                    total = no_visible;
+                    mrow = row;
+                    mcol = col;
+                }
+            }
+        }
+        println!("most found was {} at row {} and column {}", total, mrow, mcol);
+
+        return total;
+    }
+
+}
 
 fn process_file_contents( contents: &str) -> usize {
-    let dir  = create_directory(contents);
-
-    let ( _, total ) = dir.get_directory_sizes(100000);
-    return total;
+    let forest = Forest::from_string(contents);
+    return forest.count_visible();
     
 }
 
-fn create_directory(contents: &str) -> DirectoryItem {
-    let mut stack: Vec<DirectoryItem> = vec![];
-    for line in contents.lines() {
-        let line = line.trim();
-        let chars = line.chars();
-        let vchars: Vec<char> = chars.collect();
-        if line.starts_with("$ cd ..") {
-            add_child_to_parent(&mut stack);
-        
-        } else if line.starts_with("$ cd ") {
-                stack.push( DirectoryItem::Directory{ name: vchars[5..line.len()].iter().collect(), dir_items: vec![]});
-        } else if line.starts_with("$ ls") { continue; 
-        } else if line.starts_with("dir") { continue; 
-        } else if line.starts_with("$ ls") { continue; 
-        } else {
-            let parts: Vec<&str> = line.split(" ").collect();
-            let file_size = parts[0].parse::<usize>().unwrap();
-            let file_name = parts[1];
-            let len = stack.len();
-            stack[len-1].add( & DirectoryItem::File { name: file_name.to_string(), size: file_size });
-        }
-    }
-    while stack.len() >1 {
-        add_child_to_parent(&mut stack);
-    }
-    return stack[0].clone();
-}
-
-fn add_child_to_parent(stack: &mut Vec<DirectoryItem>) {
-    let len = stack.len();
-    if len >= 2 {
-        if let Some(child) = stack.pop() {
-            stack[len-2].add(&child);
-        }
-    }
-}
-
 fn process_file_contents2( contents: &str) -> usize {
-    const FILE_SPACE :isize = 70000000;
-    const REQUIRED_SPACE :isize = 30000000;
-    let dir  = create_directory(contents);
-
-    let ( v, _ ) = dir.get_directory_sizes(100000000);
-    let (root_size, _ ) = v[0];
-    let required_to_free = REQUIRED_SPACE + root_size as isize - FILE_SPACE;
-    let required_to_free = required_to_free as usize;
-    let mut v: Vec<usize> = v.iter().map(|(s,_)| *s).filter(|s| *s>=required_to_free).collect();
-    v.sort();
-    let total = v[0];
-
-    return total;
+    let forest = Forest::from_string(contents);
+    return forest.most_visible();
 }
 
 
@@ -83,111 +134,34 @@ fn process_file_contents2( contents: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn test_create_directory() {
-        let root = create_directory("$ cd /
-        $ ls
-        dir a
-        14848514 b.txt
-        8504156 c.dat
-        dir d
-        $ cd a
-        $ ls
-        dir e
-        29116 f
-        2557 g
-        62596 h.lst
-        $ cd e
-        $ ls
-        584 i
-        $ cd ..
-        $ cd ..
-        $ cd d
-        $ ls
-        4060174 j
-        8033020 d.log
-        5626152 d.ext
-        7214296 k");
-        
-        println!("the name is {} and it has size {}", root.name(), root.size());
-
-        for item in root.clone() {
-            let item_size = &item.size();
-            match item {
-                DirectoryItem::File { name, size } => {
-                    println!("Found file {} with size {}", name, size);
-                }
-                DirectoryItem::Directory {  name,  dir_items } => {
-                    println!("Found directory {} with {} items and size {}", name, dir_items.len(), item_size);
-                }
-            }
-        };
-
-        let ( v, total ) = root.get_directory_sizes(100000);
-        for (dir_size, dir_name) in v {
-            println!("{}\t{}",dir_size,dir_name);
-        }
-        println!("the total is {}",total);
-
-        assert_eq!(total, 95437);
-
-
-    }
-
-    
+   
     
     #[test]
     fn test_process_file_contents() {
-        assert_eq!(process_file_contents("$ cd /
-        $ ls
-        dir a
-        14848514 b.txt
-        8504156 c.dat
-        dir d
-        $ cd a
-        $ ls
-        dir e
-        29116 f
-        2557 g
-        62596 h.lst
-        $ cd e
-        $ ls
-        584 i
-        $ cd ..
-        $ cd ..
-        $ cd d
-        $ ls
-        4060174 j
-        8033020 d.log
-        5626152 d.ext
-        7214296 k"), 95437);
+        assert_eq!(process_file_contents("30373
+        25512
+        65332
+        33549
+        35390"), 21);
     }
 
     #[test]
     fn test_process_file_contents2() {
-        assert_eq!(process_file_contents2("$ cd /
-        $ ls
-        dir a
-        14848514 b.txt
-        8504156 c.dat
-        dir d
-        $ cd a
-        $ ls
-        dir e
-        29116 f
-        2557 g
-        62596 h.lst
-        $ cd e
-        $ ls
-        584 i
-        $ cd ..
-        $ cd ..
-        $ cd d
-        $ ls
-        4060174 j
-        8033020 d.log
-        5626152 d.ext
-        7214296 k"), 24933642);
+        assert_eq!(process_file_contents2("30373
+        25512
+        65332
+        33549
+        35390"), 8);
+    }
+
+    #[test]
+    fn test_most_visible() {
+
+        assert_eq!(process_file_contents2("30373
+        25512
+        65332
+        33549
+        35390"), 8);
     }
 
 }
