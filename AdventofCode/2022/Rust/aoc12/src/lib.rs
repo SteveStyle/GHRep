@@ -40,12 +40,12 @@ impl Grid {
                     'S' => {
                         grid.start = (r,c);
                         row.push('a' as i32);
-                        row_least_moves.push(Some(0));
+                        row_least_moves.push(None);
                     },
                     'E' => {
                         grid.end = (r ,c);
                         row.push('z' as i32);
-                        row_least_moves.push(None);
+                        row_least_moves.push(Some(0));
                     },
                     _ => {
                         row.push(chars[c] as i32);
@@ -64,26 +64,44 @@ impl Grid {
         return grid;
     }
 
-    fn check_and_update(&mut self, old_height: i32, new_row: usize, new_col: usize, steps: usize ) {
+    fn check_and_update(&mut self, old_height: i32, new_row: usize, new_col: usize, steps: usize, goal : char ) -> Option<usize> {
         if  self.least_moves[new_row][new_col] == None &&
-            self.grid[new_row][new_col] <= old_height + 1 {
-            self.least_moves[new_row][new_col] = Some(steps + 1);
+            self.grid[new_row][new_col] >= old_height - 1 {
+                self.least_moves[new_row][new_col] = Some(steps + 1);
+                if goal == 'a' && self.grid[new_row][new_col] == 'a' as i32 {
+                    return Some(steps + 1);
+                } else if ( new_row, new_col ) == self.start {
+                        return Some(steps + 1);
+                }            
         }
+        return None;
     }
     
-    fn solve(&mut self, stop_at: usize ) -> Option<usize> {
+    fn solve(&mut self, stop_at: usize, goal : char ) -> Option<usize> {
         for steps in 0..stop_at {
             for r in 0..self.no_rows {
                 for c in 0..self.no_cols {
                     if self.least_moves[r][c] == Some(steps) {
-                        if r > 0                { self.check_and_update( self.grid[r][c], r-1,c, steps ); }
-                        if r < self.no_rows - 1 { self.check_and_update( self.grid[r][c], r+1,c, steps );}
-                        if c > 0                { self.check_and_update( self.grid[r][c], r, c-1, steps); }
-                        if c < self.no_cols -1  { self.check_and_update( self.grid[r][c], r, c+1, steps);}
+                        if r > 0                {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r-1,c, steps, goal ) {
+                                                        return Some(total_steps);
+                                                    } 
+                                                }
+                        if r < self.no_rows - 1 {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r+1,c, steps, goal ) {
+                                                        return Some(total_steps);
+                                                    } 
+                                                }
+                        if c > 0                {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r,c-1, steps, goal ) {
+                                                        return Some(total_steps);
+                                                    } 
+                                                }
+                        if c < self.no_cols -1  {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r,c+1, steps, goal ) {
+                                                        return Some(total_steps);
+                                                    } 
+                                                }
                     }
                 }
             }
-            if let Some(total_steps) = self.least_moves[self.end.0][self.end.1] {
+            if let Some(total_steps) = self.least_moves[self.start.0][self.start.1] {
                 return Some(total_steps);
             }
         }
@@ -91,45 +109,19 @@ impl Grid {
         return None;
         //return self.least_moves[self.end.0][self.end.1].unwrap();
     }
-
-    fn set_start(&mut self, r_start :usize, c_start : usize) {
-        self.start = (r_start, c_start);
-        for r in 0..self.no_rows {
-            for c in 0..self.no_cols {
-                self.least_moves[r][c] = None;
-            }
-        }
-        self.least_moves[r_start][c_start] = Some(0);
-    }
-
-    fn best_start(&mut self) -> Option<usize> {
-        let maximum = self.no_rows * self.no_cols;
-        let mut result:usize = maximum;
-        for r in 0..self.no_rows {
-            for c in 0..self.no_cols {
-                if self.grid[r][c] == 'a' as i32 {
-                    self.set_start(r, c);
-                    if let Some(steps) = self.solve(result) {
-                        if steps < result { result = steps; }
-                    }
-                }
-            }
-        }
-        if result < maximum { return Some(result); }
-        else {return None; }
-    }
+    
 }
 
 fn process_file_contents( contents: &str) -> usize {
     let mut grid = Grid::new(contents);
-    let total = grid.solve(grid.no_rows*grid.no_cols).unwrap_or(0);
+    let total = grid.solve(grid.no_rows*grid.no_cols, 'S').unwrap_or(0);
     return total;
 }
 
 
 fn process_file_contents2( contents: &str) -> usize {
     let mut grid = Grid::new(contents);
-    let total = grid.best_start().unwrap_or(0);
+    let total = grid.solve(grid.no_rows*grid.no_cols, 'a').unwrap_or(0);
     return total;
 }
 
