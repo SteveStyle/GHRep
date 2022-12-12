@@ -8,48 +8,10 @@ pub fn show_totals() {
     let content = fs::read_to_string(FILE_PATH)
         .expect(&format!("I was not able to read the file {}.",FILE_PATH));
     let total_score = process_file_contents( &content );
-    println!("The original total score is {}.",total_score);
+    println!("The part 1 total score is {}.",total_score);
     let total_score = process_file_contents2( &content );
     println!("The part 2 total score is {}.",total_score);
 }
-
-
-fn get_integers( line: &str ) -> Vec<i64> {
-    let mut cnt = 0;
-    let chars: Vec<char> = line.chars().collect();
-    let mut char_iter = line.chars();
-    let len = chars.len();
-    let mut v:Vec<i64> = Vec::new();
-    loop {
-        if cnt > len + 2 { panic!("outer: cnt {} is larger than len {}",cnt,len); }
-        if let Some(c) = char_iter.next() {
-            if c.is_digit(10) { 
-                let start = cnt; cnt +=1;
-                loop {
-                    if cnt > len + 10 { panic!("inner: cnt {} is larger than len {}",cnt,len); }
-                    if let Some(c) = char_iter.next() {
-                        if !c.is_digit(10) {
-                            let end = cnt; 
-//                            println!("not final: line: {}\tstart: {}\t end: {}",line,start,end);
-                            v.push( chars[start..end].iter().collect::<String>().parse::<i64>().unwrap() );
-                            cnt += 1;
-                            break;
-                        } else {
-                            cnt += 1;
-                        }
-                    } else { 
-                        let end = cnt; 
-//                        println!("final: line: {}\tstart: {}\t end: {}",line,start,end);
-                        v.push( chars[start..end].iter().collect::<String>().parse::<i64>().unwrap() );
-                        break;
-                    }
-                }
-            }
-            else { cnt += 1; }
-        } else {break;}
-    }
-    return v;
-}   
 
 struct Grid {
     grid : Vec<Vec<i32>>,
@@ -63,7 +25,10 @@ struct Grid {
 impl Grid {
     fn new( contents : &str ) -> Grid {
         let mut grid = Grid{ grid: vec![], least_moves: vec![], start: (0,0), end: (0,0), no_rows: 0, no_cols: 0 };
-        let lines: Vec<&str> = contents.lines().collect();
+        let mut lines: Vec<&str> = vec![];
+        for line in contents.lines() {
+            lines.push(line.trim());
+        }
         grid.no_rows = lines.len();
         grid.no_cols = lines[0].len();
         for r in 0..grid.no_rows {
@@ -106,36 +71,65 @@ impl Grid {
         }
     }
     
-    fn solve(&mut self) ->usize {
-        for steps in 0..self.no_rows * self.no_cols {
+    fn solve(&mut self, stop_at: usize ) -> Option<usize> {
+        for steps in 0..stop_at {
             for r in 0..self.no_rows {
                 for c in 0..self.no_cols {
                     if self.least_moves[r][c] == Some(steps) {
-                        if r > 0                { Grid::check_and_update( self, self.grid[r][c], r-1,c, steps ); }
-                        if r < self.no_rows - 1 { Grid::check_and_update( self, self.grid[r][c], r+1,c, steps );}
-                        if c > 0                { Grid::check_and_update( self, self.grid[r][c], r, c-1, steps); }
-                        if c < self.no_cols -1  { Grid::check_and_update( self, self.grid[r][c], r, c+1, steps);}
+                        if r > 0                { self.check_and_update( self.grid[r][c], r-1,c, steps ); }
+                        if r < self.no_rows - 1 { self.check_and_update( self.grid[r][c], r+1,c, steps );}
+                        if c > 0                { self.check_and_update( self.grid[r][c], r, c-1, steps); }
+                        if c < self.no_cols -1  { self.check_and_update( self.grid[r][c], r, c+1, steps);}
                     }
                 }
             }
             if let Some(total_steps) = self.least_moves[self.end.0][self.end.1] {
-                return total_steps;
+                return Some(total_steps);
             }
         }
 
-        return self.least_moves[self.end.0][self.end.1].unwrap();
+        return None;
+        //return self.least_moves[self.end.0][self.end.1].unwrap();
+    }
+
+    fn set_start(&mut self, r_start :usize, c_start : usize) {
+        self.start = (r_start, c_start);
+        for r in 0..self.no_rows {
+            for c in 0..self.no_cols {
+                self.least_moves[r][c] = None;
+            }
+        }
+        self.least_moves[r_start][c_start] = Some(0);
+    }
+
+    fn best_start(&mut self) -> Option<usize> {
+        let maximum = self.no_rows * self.no_cols;
+        let mut result:usize = maximum;
+        for r in 0..self.no_rows {
+            for c in 0..self.no_cols {
+                if self.grid[r][c] == 'a' as i32 {
+                    self.set_start(r, c);
+                    if let Some(steps) = self.solve(result) {
+                        if steps < result { result = steps; }
+                    }
+                }
+            }
+        }
+        if result < maximum { return Some(result); }
+        else {return None; }
     }
 }
 
 fn process_file_contents( contents: &str) -> usize {
     let mut grid = Grid::new(contents);
-    let mut total = grid.solve();
+    let total = grid.solve(grid.no_rows*grid.no_cols).unwrap_or(0);
     return total;
 }
 
 
-fn process_file_contents2( contents: &str) -> i32 {
-    let total =0;
+fn process_file_contents2( contents: &str) -> usize {
+    let mut grid = Grid::new(contents);
+    let total = grid.best_start().unwrap_or(0);
     return total;
 }
 
@@ -157,14 +151,11 @@ mod tests {
 
     #[test]
     fn test_process_file_contents2() {
-        assert_eq!(process_file_contents2("R 4
-        U 4
-        L 3
-        D 1
-        R 4
-        D 1
-        L 5
-        R 2"), 0);
+        assert_eq!(process_file_contents2("Sabqponm
+        abcryxxl
+        accszExk
+        acctuvwj
+        abdefghi"), 29);
     }
 
 }
