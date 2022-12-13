@@ -3,7 +3,7 @@ use std::fs;
 //use std::num::integer::lcm;
 
 pub fn show_totals() {
-    const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input12.txt";
+    const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input13.txt";
    
     let content = fs::read_to_string(FILE_PATH)
         .expect(&format!("I was not able to read the file {}.",FILE_PATH));
@@ -13,115 +13,99 @@ pub fn show_totals() {
     println!("The part 2 total score is {}.",total_score);
 }
 
-struct Grid {
-    grid : Vec<Vec<i32>>,
-    least_moves : Vec<Vec<Option<usize>>>,
-    start : (usize,usize),
-    end : (usize,usize),
-    no_rows : usize,
-    no_cols : usize,
+#[derive(Clone)]
+enum Packet {
+    Int( usize ),
+    List( Vec<Packet> ),
 }
 
-impl Grid {
-    fn new( contents : &str ) -> Grid {
-        let mut grid = Grid{ grid: vec![], least_moves: vec![], start: (0,0), end: (0,0), no_rows: 0, no_cols: 0 };
-        let mut lines: Vec<&str> = vec![];
-        for line in contents.lines() {
-            lines.push(line.trim());
-        }
-        grid.no_rows = lines.len();
-        grid.no_cols = lines[0].len();
-        for r in 0..grid.no_rows {
-            let mut row : Vec<i32> = vec![];
-            let mut row_least_moves : Vec<Option<usize>> = vec![];
-            let chars: Vec<char> = lines[r].chars().collect();
-            for c in 0..grid.no_cols {
-                match chars[c] {
-                    'S' => {
-                        grid.start = (r,c);
-                        row.push('a' as i32);
-                        row_least_moves.push(None);
-                    },
-                    'E' => {
-                        grid.end = (r ,c);
-                        row.push('z' as i32);
-                        row_least_moves.push(Some(0));
-                    },
-                    _ => {
-                        row.push(chars[c] as i32);
-                        row_least_moves.push(None);
-                    }
-                }
-            }
-            assert_eq!(row.len(),grid.no_cols);
-            assert_eq!(row_least_moves.len(),grid.no_cols);
-            grid.grid.push(row);
-            grid.least_moves.push(row_least_moves);
-        }
-        assert_eq!(grid.grid.len(),grid.no_rows);
-        assert_eq!(grid.least_moves.len(),grid.no_rows);
+use std::cmp::Ordering;
 
-        return grid;
-    }
-
-    fn check_and_update(&mut self, old_height: i32, new_row: usize, new_col: usize, steps: usize, goal : char ) -> Option<usize> {
-        if  self.least_moves[new_row][new_col] == None &&
-            self.grid[new_row][new_col] >= old_height - 1 {
-                self.least_moves[new_row][new_col] = Some(steps + 1);
-                if goal == 'a' && self.grid[new_row][new_col] == 'a' as i32 {
-                    return Some(steps + 1);
-                } else if ( new_row, new_col ) == self.start {
-                        return Some(steps + 1);
-                }            
-        }
-        return None;
-    }
-    
-    fn solve(&mut self, stop_at: usize, goal : char ) -> Option<usize> {
-        for steps in 0..stop_at {
-            for r in 0..self.no_rows {
-                for c in 0..self.no_cols {
-                    if self.least_moves[r][c] == Some(steps) {
-                        if r > 0                {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r-1,c, steps, goal ) {
-                                                        return Some(total_steps);
-                                                    } 
-                                                }
-                        if r < self.no_rows - 1 {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r+1,c, steps, goal ) {
-                                                        return Some(total_steps);
-                                                    } 
-                                                }
-                        if c > 0                {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r,c-1, steps, goal ) {
-                                                        return Some(total_steps);
-                                                    } 
-                                                }
-                        if c < self.no_cols -1  {   if let Some(total_steps) = self.check_and_update( self.grid[r][c], r,c+1, steps, goal ) {
-                                                        return Some(total_steps);
-                                                    } 
-                                                }
-                    }
-                }
-            }
-            if let Some(total_steps) = self.least_moves[self.start.0][self.start.1] {
-                return Some(total_steps);
+impl Packet {
+    fn eq_list_int(v : &Vec<Packet>, n : &usize) -> bool {
+        if v.len() == 1 {
+            match v[0] {
+                Self::Int(m) => return m==*n,
+                Self::List(_) => return false,
             }
         }
-
-        return None;
-        //return self.least_moves[self.end.0][self.end.1].unwrap();
+        return false;
     }
-    
 }
+
+impl PartialEq for Packet {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            (Self::List(l0), Self::List(r0)) if l0.len() == r0.len() => {
+                let len = l0.len();
+                for i in 0..len {
+                    if !(l0[i] == r0[i]) { return false;}
+                }
+                return true;
+            }
+            (Self::List(l0), Self::List(r0)) => false,
+            (Self::Int(l0), Self::List(r0)) => Self::eq_list_int(r0, l0),
+            (Self::List(l0), Self::Int(r0)) => Self::eq_list_int(l0, r0),
+        }
+    }
+}
+
+impl PartialOrd for Packet {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Self::Int(l0), Self::Int(r0)) => l0.partial_cmp(r0),
+            (Self::List(l0), Self::List(r0)) if l0.len() < r0.len() => {
+                let len = l0.len();
+                for i in 0..len {
+                    let c = l0[i].partial_cmp(&r0[i]).unwrap();
+                    if !(c==Ordering::Equal) {return Some(c)};
+                }
+                return Some(Ordering::Less);
+            }
+            (Self::List(l0), Self::List(r0)) if l0.len() > r0.len() => {
+                let len = r0.len();
+                for i in 0..len {
+                    let c = l0[i].partial_cmp(&r0[i]).unwrap();
+                    if !(c==Ordering::Equal) {return Some(c)};
+                }
+                return Some(Ordering::Greater);
+            }
+            (Self::List(l0), Self::List(r0)) => { //lengths are the same
+                let len = l0.len();
+                for i in 0..len {
+                    let c = l0[i].partial_cmp(&r0[i]).unwrap();
+                    if !(c==Ordering::Equal) {return Some(c)};
+                }
+                return Some(Ordering::Equal);
+            }
+            (Self::Int(l0), Self::List(r0)) => Self::partial_cmp(&Self::List(vec![self.clone()]), self),
+            (Self::List(l0), Self::Int(r0)) => Self::partial_cmp(self, &Self::List(vec![other.clone()])),
+        }
+    }
+
+}
+
+impl Packet {
+    fn new(contents: &str) {
+        let pairs = contents.split("/n/n");
+        let len = pairs.len();
+        for i in 0..len {
+            let lines = pairs[i].lines();
+            
+        }
+    }
+}
+
 
 fn process_file_contents( contents: &str) -> usize {
-    let mut grid = Grid::new(contents);
-    let total = grid.solve(grid.no_rows*grid.no_cols, 'S').unwrap_or(0);
+    let  total = 0;
     return total;
 }
 
 
 fn process_file_contents2( contents: &str) -> usize {
-    let mut grid = Grid::new(contents);
-    let total = grid.solve(grid.no_rows*grid.no_cols, 'a').unwrap_or(0);
+    let total = 0;
     return total;
 }
 
@@ -134,20 +118,56 @@ mod tests {
     
     #[test]
     fn test_process_file_contents() {
-        assert_eq!(process_file_contents("Sabqponm
-        abcryxxl
-        accszExk
-        acctuvwj
-        abdefghi"), 31);
+        assert_eq!(process_file_contents("[1,1,3,1,1]
+        [1,1,5,1,1]
+        
+        [[1],[2,3,4]]
+        [[1],4]
+        
+        [9]
+        [[8,7,6]]
+        
+        [[4,4],4,4]
+        [[4,4],4,4,4]
+        
+        [7,7,7,7]
+        [7,7,7]
+        
+        []
+        [3]
+        
+        [[[]]]
+        [[]]
+        
+        [1,[2,[3,[4,[5,6,7]]]],8,9]
+        [1,[2,[3,[4,[5,6,0]]]],8,9]"), 13);
     }
 
     #[test]
     fn test_process_file_contents2() {
-        assert_eq!(process_file_contents2("Sabqponm
-        abcryxxl
-        accszExk
-        acctuvwj
-        abdefghi"), 29);
+        assert_eq!(process_file_contents2("[1,1,3,1,1]
+        [1,1,5,1,1]
+        
+        [[1],[2,3,4]]
+        [[1],4]
+        
+        [9]
+        [[8,7,6]]
+        
+        [[4,4],4,4]
+        [[4,4],4,4,4]
+        
+        [7,7,7,7]
+        [7,7,7]
+        
+        []
+        [3]
+        
+        [[[]]]
+        [[]]
+        
+        [1,[2,[3,[4,[5,6,7]]]],8,9]
+        [1,[2,[3,[4,[5,6,0]]]],8,9]"), 0);
     }
 
 }
