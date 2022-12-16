@@ -123,7 +123,7 @@ fn get_intersection( contents: &str, line_no: i32 ) -> i32 {
 }
 
 fn get_gaps( contents: &str, x_start: i32, x_end : i32, y_start: i32, y_end: i32 ) -> Vec<(i32,i32)> {
-    let mut intervals : Vec<(i32,i32)> = vec![];
+    let mut intervals : Vec<(i32,i32)>;
     let mut readings : Vec<Reading> = vec![];
     let mut gaps : Vec<(i32,i32)> = vec![];
     for line in contents.lines() {
