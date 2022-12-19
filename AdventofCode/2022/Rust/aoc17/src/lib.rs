@@ -1,11 +1,16 @@
-use std::collections::HashMap;
+//use std::collections::HashMap;
 //use std::fmt::{Display, self};
 use std::fs;
-use std::hash::Hash;
-use std::str::FromStr;
-use regex::Regex;
+
+use sprite::sprite::Sprite;
+//use std::hash::Hash;
+//use std::str::FromStr;
+//use regex::Regex;
 //extern crate lazy_static;
-use lazy_static::lazy_static;
+//use lazy_static::lazy_static;
+
+pub mod sprite;
+mod utils;
 
 
 pub fn show_totals() {
@@ -19,40 +24,32 @@ pub fn show_totals() {
     println!("The part 2 total score is {}.",total_score);
 }
 
-
-fn get_numbers<T: FromStr>(source: &str) -> Vec<T>
-where T::Err: std::fmt::Debug
-/* add to toml
-[dependencies]
-regex = "1.3.9" 
-*/
-{
-    // Use a regular expression to match the first sequence of digits in the string
-    // Support negative and floating point numbers.
-    let re = Regex::new(r"-?\d+(\.\d+)?").unwrap();
-    let mut result: Vec<T> = vec![];
-    for captures in re.captures_iter(source) {
-        let digit_string = captures.get(0).unwrap().as_str();
-        let number = digit_string.parse().unwrap();
-        result.push(number);
-    }
-    return result;
-}
-
-
-
+//use crate::sprite::sprite;
 fn process_file_contents( contents: &str) -> i32 {
-    return 0;
+    return Sprite::new(contents).move_rocks(2022);
 }
 
 
-fn process_file_contents2( contents: &str) -> i32 {
-    return 0;
+fn process_file_contents2( contents: &str) -> u128 {
+    let result = Sprite::new(contents).find_cycle(20000,5);
+    return result as u128;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+ 
+    #[test]
+    fn test_find_cycle() {
+        let result = Sprite::new(">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>").find_cycle(100000,5);
+        println!("result = {}",result);
+        assert_eq!(result, 1514285714288);
+    }
+  
+    #[test]
+    fn test_move_rock() {
+        println!("rock height is {}", Sprite::new(">>><<><>><<<>><>>><<<>>><<<><<<>><>><<>>").move_rocks(10) );
+    }
  
     #[test]
     fn test_process_file_contents() {
