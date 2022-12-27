@@ -9,12 +9,20 @@ use std::ops::Sub;
 
 use regex::Regex;
 
-use chrono::Local;
+//use chrono::Local;
 
 pub const ORE       : usize = 0;
 pub const CLAY      : usize = 1;
 pub const OBSIDIAN  : usize = 2;
 pub const GEODE     : usize = 3;
+
+#[derive(Clone)]
+enum Material {
+    Ore = 0,
+    Clay = 1,
+    Obsidian = 2,
+    Geode = 3,
+}
 
 
 #[derive(Debug, Clone, Copy, Eq)]
@@ -107,7 +115,7 @@ impl GeodeVector {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Copy,Clone)]
 pub struct Blueprint {
     pub blueprint: Counter, 
     required: [GeodeVector;4],
@@ -122,7 +130,9 @@ impl Blueprint {
                 GeodeVector::new(0,0,0,0),
                 GeodeVector::new(1,0,0,0), 
                 -10, 
-                time_left) 
+                time_left,
+                [false;4]
+            ) 
         {
             return result;
         } else {
@@ -130,34 +140,44 @@ impl Blueprint {
         }
     }
     
-    fn rec_solve(&self, current_materials : GeodeVector, current_robots : GeodeVector, best_score : Counter, time_left: Counter) -> Option<Counter> {
+    fn rec_solve(&self, current_materials : GeodeVector, current_robots : GeodeVector, best_score : Counter, time_left: Counter, exclude : [bool;4]  ) -> Option<Counter> {
         if time_left == 0 { 
             let new_score = current_materials[GEODE]; 
             if new_score > best_score { 
-                println!("{}:  new best score {}",Local::now().format("%Y-%m-%d %H:%M:%S%.6f"), new_score);
+//                println!("{}:  new best score {}",Local::now().format("%Y-%m-%d %H:%M:%S%.6f"), new_score);
+//                println!("{}:  {:?}",Local::now().format("%Y-%m-%d %H:%M:%S%.6f"), history);
                 return Some(new_score); 
             } else { 
                 return None; 
             }
         }
 
-        if current_materials[GEODE] + (time_left + 1) * (2 * current_robots[GEODE] + time_left) <= 2 * best_score { return None; }
+        if 2* current_materials[GEODE] + (time_left + 1) * (2 * current_robots[GEODE] + time_left) <= 2 * best_score { return None; }
 
         let mut new_best_score = best_score;
 
+        let mut new_exclude = exclude.clone();
+
         for i in (ORE..GEODE+1).rev() {        
-            if ( i == GEODE || current_robots[i] < self.max[i] ) && current_materials >= self.required[i]  {
+            if !exclude[i] && ( i == GEODE || current_robots[i] < self.max[i] ) && current_materials >= self.required[i]  {
                 let new_materials = current_materials + current_robots - self.required[i];
                 let mut new_robots = current_robots;
                 new_robots.v[i] +=1;
-                if let Some(score) = self.rec_solve( new_materials, new_robots, new_best_score, time_left - 1) {
+                /*let mut new_history = history.clone();
+                new_history.push( char::from_digit(i as u32, 10).unwrap() );
+                */
+                if let Some(score) = self.rec_solve( new_materials, new_robots, new_best_score, time_left - 1, [false;4] ) {
                     new_best_score = score;
                 };
+                new_exclude[i] = true;
             }
         }
 
         let new_materials = current_materials + current_robots;
-        if let Some(score) = self.rec_solve( new_materials, current_robots, new_best_score, time_left - 1) {
+/*        let mut new_history = history.clone();
+        new_history.push(' ');
+*/
+        if let Some(score) = self.rec_solve( new_materials, current_robots, new_best_score, time_left - 1, new_exclude ) {
             new_best_score = score;
         };
 
