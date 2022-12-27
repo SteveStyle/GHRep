@@ -16,7 +16,8 @@ pub mod pos3d;
 mod grid_3d;
 
 pub fn show_totals() {
-    const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input18.txt";
+//    const FILE_PATH: &str = "/home/steve/GHRep/AdventofCode/2022/data/input18.txt";
+const FILE_PATH: &str = "d:/GHRep/GHRep/AdventofCode/2022/data/input18.txt";
    
     let content = fs::read_to_string(FILE_PATH)
         .expect(&format!("I was not able to read the file {}.",FILE_PATH));
