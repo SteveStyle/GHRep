@@ -1,6 +1,7 @@
 //use i32 as Counter;
 pub type Counter = i32;
 
+//use core::time;
 //use crate::utils::*;
 use std::ops::Add;
 use std::ops::Deref;
@@ -8,10 +9,13 @@ use std::ops::Sub;
 
 use regex::Regex;
 
+use chrono::Local;
+
 pub const ORE       : usize = 0;
 pub const CLAY      : usize = 1;
 pub const OBSIDIAN  : usize = 2;
 pub const GEODE     : usize = 3;
+
 
 #[derive(Debug, Clone, Copy, Eq)]
 pub struct GeodeVector {
@@ -53,6 +57,36 @@ impl PartialEq for GeodeVector {
     }
 }
 
+use std::cmp::{PartialOrd, Ordering};
+
+impl PartialOrd for GeodeVector {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if  self.v[ORE]         == other.v[ORE]        &&
+            self.v[CLAY]        == other.v[CLAY]       &&
+            self.v[OBSIDIAN]    == other.v[OBSIDIAN]   &&
+            self.v[GEODE]       == other.v[GEODE] 
+        { return Some(Ordering::Equal) }
+
+        if  self.v[ORE]         >= other.v[ORE]        &&
+            self.v[CLAY]        >= other.v[CLAY]       &&
+            self.v[OBSIDIAN]    >= other.v[OBSIDIAN]   &&
+            self.v[GEODE]       >= other.v[GEODE] 
+        { return Some(Ordering::Greater) }
+
+        if  self.v[ORE]         <= other.v[ORE]        &&
+            self.v[CLAY]        <= other.v[CLAY]       &&
+            self.v[OBSIDIAN]    <= other.v[OBSIDIAN]   &&
+            self.v[GEODE]       <= other.v[GEODE] 
+        { return Some(Ordering::Less) }
+
+        return None;
+
+    }
+}
+
+
+
+
 //impl Eq for GeodeVector { }
 
 impl Deref for GeodeVector {
@@ -74,16 +108,69 @@ impl GeodeVector {
 }
 
 #[derive(Debug)]
-struct Blueprint {
-    blueprint: Counter, 
-    ore_ore: Counter, 
-    clay_ore: Counter,
-    obsidian_ore: Counter,
-    obsidian_clay: Counter, 
-    geode_ore: Counter, 
-    geode_obsidian: Counter,
+pub struct Blueprint {
+    pub blueprint: Counter, 
+    required: [GeodeVector;4],
+    max: GeodeVector,
 }
-fn extract_info(input: &str) -> Vec<Blueprint> {
+
+impl Blueprint {
+    
+    pub fn solve(&self, time_left : Counter) -> Counter {
+        if let Some(result) = 
+            self.rec_solve(
+                GeodeVector::new(0,0,0,0),
+                GeodeVector::new(1,0,0,0), 
+                -10, 
+                time_left) 
+        {
+            return result;
+        } else {
+            return -1;
+        }
+    }
+    
+    fn rec_solve(&self, current_materials : GeodeVector, current_robots : GeodeVector, best_score : Counter, time_left: Counter) -> Option<Counter> {
+        if time_left == 0 { 
+            let new_score = current_materials[GEODE]; 
+            if new_score > best_score { 
+                println!("{}:  new best score {}",Local::now().format("%Y-%m-%d %H:%M:%S%.6f"), new_score);
+                return Some(new_score); 
+            } else { 
+                return None; 
+            }
+        }
+
+        if current_materials[GEODE] + (time_left + 1) * (2 * current_robots[GEODE] + time_left) <= 2 * best_score { return None; }
+
+        let mut new_best_score = best_score;
+
+        for i in (ORE..GEODE+1).rev() {        
+            if ( i == GEODE || current_robots[i] < self.max[i] ) && current_materials >= self.required[i]  {
+                let new_materials = current_materials + current_robots - self.required[i];
+                let mut new_robots = current_robots;
+                new_robots.v[i] +=1;
+                if let Some(score) = self.rec_solve( new_materials, new_robots, new_best_score, time_left - 1) {
+                    new_best_score = score;
+                };
+            }
+        }
+
+        let new_materials = current_materials + current_robots;
+        if let Some(score) = self.rec_solve( new_materials, current_robots, new_best_score, time_left - 1) {
+            new_best_score = score;
+        };
+
+        
+        if new_best_score > best_score { 
+            Some(new_best_score)
+        } else {
+            None
+        }
+    }
+}
+
+pub fn extract_info(input: &str) -> Vec<Blueprint> {
     //let re = Regex::new(r"Blueprint (\d+): Each ore robot costs (\d+) ore. Each clay robot costs (\d+) ore. Each obsidian robot costs (\d+) ore and (\d+) clay. Each geode robot costs (\d+) ore and (\d+) obsidian.").unwrap();
 
     let re = Regex::new(r"Blueprint (\d+):\s+Each ore robot costs (\d+) ore\.\s+Each clay robot costs (\d+) ore\.\s+Each obsidian robot costs (\d+) ore and (\d+) clay\.\s+Each geode robot costs (\d+) ore and (\d+) obsidian\.").unwrap();
@@ -98,7 +185,15 @@ fn extract_info(input: &str) -> Vec<Blueprint> {
         let obsidian_clay = cap[5].parse::<Counter>().unwrap();
         let geode_ore = cap[6].parse::<Counter>().unwrap();
         let geode_obsidian = cap[7].parse::<Counter>().unwrap();
-        results.push(  Blueprint{ blueprint, ore_ore, clay_ore, obsidian_ore, obsidian_clay, geode_ore, geode_obsidian } );
+        results.push(  Blueprint{ blueprint, 
+                                  required : [  GeodeVector { v: [ore_ore,      0,              0,              0] },
+                                                GeodeVector { v: [clay_ore,     0,              0,              0] },
+                                                GeodeVector { v: [obsidian_ore, obsidian_clay,  0,              0] },
+                                                GeodeVector { v: [geode_ore,    0,              geode_obsidian, 0] } 
+                                        ] ,
+                                    max : GeodeVector::new(clay_ore.max(obsidian_ore.max(geode_ore)), obsidian_clay, geode_obsidian, 25),
+                                } 
+                    );
     }
 
     results
@@ -122,5 +217,24 @@ mod tests {
             Each geode robot costs 3 ore and 12 obsidian."
         );
         println!("{:#?}",results);
+    }
+    #[test]
+    fn test_solve() {
+        let results = crate::geode::extract_info(
+            "Blueprint 1:
+            Each ore robot costs 4 ore.
+            Each clay robot costs 2 ore.
+            Each obsidian robot costs 3 ore and 14 clay.
+            Each geode robot costs 2 ore and 7 obsidian.
+          
+          Blueprint 2:
+            Each ore robot costs 2 ore.
+            Each clay robot costs 3 ore.
+            Each obsidian robot costs 3 ore and 8 clay.
+            Each geode robot costs 3 ore and 12 obsidian."
+        );
+        for i in 0..results.len() {
+            println!("The best for blueprint {} is {:#?}",results[i].blueprint,results[i].solve(24));
+        }
     }
 }

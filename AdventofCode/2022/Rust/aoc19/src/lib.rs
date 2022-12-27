@@ -1,6 +1,7 @@
 //use std::collections::HashMap;
 //use std::fmt::{Display, self};
 use std::fs;
+use chrono::Local;
 
 //use grid_3d::grid_3d::Grid3d;
 
@@ -33,7 +34,15 @@ pub fn show_totals() {
 
 //use crate::sprite::sprite;
 fn process_file_contents( contents: &str) -> i128 {
-    return 0;
+    let results = crate::geode::extract_info( contents );
+    let mut result : i128 = 0;
+    for i in 0..results.len() {
+        let score = results[i].solve(24);
+        println!("{}:  The best for blueprint {} is {:#?}",Local::now().format("%Y-%m-%d %H:%M:%S%.6f"), results[i].blueprint, score);
+        result += results[i].blueprint as i128 * score as i128;
+    }
+
+    return result;
 }
 
 
