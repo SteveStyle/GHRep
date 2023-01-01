@@ -11,7 +11,7 @@ enum Instruction {
     TurnRight,
 }
 
-#[derive(Eq, Debug, Hash, PartialEq)]
+#[derive(Eq, Debug, Hash, Clone, Copy, PartialEq)]
 enum Direction {
     Right = 0,
     Down  = 1,
@@ -45,7 +45,7 @@ impl Direction {
         }
     }
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct Position {
     x: isize,
     y: isize,
@@ -95,7 +95,7 @@ pub struct Map {
 //implement display for Map
 impl std::fmt::Display for Map {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let result = String::new();
+        let mut result = String::new();
         result += &self.format_map();
         result += format!("width: {}, height: {}, position: {:?}, direction: {:?}\ninstructions: {:?}\nfirst non space {:?}\nlast non space {:?}", 
                         self.width, self.height, self.position, self.direction, self.instructions, self.first_non_space, self.last_non_space).as_str();
@@ -131,22 +131,18 @@ impl Map {
         let lines = map_text.lines().collect::<Vec<_>>();
     
         // Convert each line into a Vec of chars
-        let map = lines.iter().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
+        let mut map = lines.iter().map(|line| line.chars().collect::<Vec<_>>()).collect::<Vec<_>>();
     
         // Determine the width and height of the map
         let width = map.iter().map(|l| l.len()).max().unwrap();
         let height = map.len();
 
         // extend each row to the width of the map using spaces
-        for row in map.iter() {
+        for row in map.iter_mut() {
             for _ in row.len()..width {
                 row.push(' ');
             }
         }
-
-        //calculate the first and last non-space in each row and column, indexed by direction and column number or row number
-        let mut first_non_space = DirectionLimit::new();
-        let mut last_non_space = DirectionLimit::new();
 
         // Initialize a new Map object
         let x = map[0].iter().position(|&c| c == '.').unwrap() as isize;
@@ -160,11 +156,14 @@ impl Map {
                 y: 0,
             },
             direction: Right,
-            first_non_space,
-            last_non_space,
+            first_non_space: DirectionLimit::new(),
+            last_non_space: DirectionLimit::new(),
         };
 
         map.calculate_first_last_non_space();
+
+        //set the position to the first . in the first row of the map, facing right
+        map.position = Position{ x: map.first_non_space[&Right][0], y: 0 };
     
             // Extract the instructions from the input string
         let mut distance = 0;
@@ -196,17 +195,15 @@ impl Map {
 
     fn calculate_first_last_non_space(&mut self) {
         //calculate the first and last non-space in each row and column, indexed by direction and column number or row number
-        let &first_non_space = &self.first_non_space;
-        let &last_non_space  = &self.last_non_space;
 
         for direction in [Right, Left] {
-            first_non_space.insert(direction, vec![-1;self.width]);
-            last_non_space.insert(direction, vec![-1;self.width]);
+            self.first_non_space.insert(direction, vec![-1;self.width]);
+            self.last_non_space.insert(direction, vec![-1;self.width]);
         }
     
         for direction in [Up, Down] {
-            first_non_space.insert(direction, vec![-1;self.height]);
-            last_non_space.insert(direction, vec![-1;self.height]);
+            self.first_non_space.insert(direction, vec![-1;self.height]);
+            self.last_non_space.insert(direction, vec![-1;self.height]);
         }
     
         // For each direction, calculate the first and last non-space for each row or column
@@ -214,18 +211,19 @@ impl Map {
             for x in 0..self.width {
                 let c = self.map[y][x];
                 if c != ' ' {
-                    if first_non_space[&Right][y] == -1 {
-                        first_non_space[&Right][y] = x as isize;
-                        last_non_space[&Left][y] = x as isize;
+                    if self.first_non_space[&Right][y] == -1 {
+                        self.first_non_space.get_mut(&Right).unwrap()[y] = x as isize;
+                        self.last_non_space.get_mut(&Left).unwrap()[y] = x as isize;
                     }
-                    last_non_space[&Right][y] = x as isize;
+                    self.last_non_space.get_mut(&Right).unwrap()[y] = x as isize;
+                    self.first_non_space.get_mut(&Left).unwrap()[y] = x as isize;
 
-                    if first_non_space[&Down][x] == -1 {
-                        first_non_space[&Down][x] = y as isize;
-                        last_non_space[&Up][x] = y as isize;
+                    if self.first_non_space[&Down][x] == -1 {
+                        self.first_non_space.get_mut(&Down).unwrap()[x] = y as isize;
+                        self.last_non_space.get_mut(&Up).unwrap()[x] = y as isize;
                     }
-                    last_non_space[&Down][x] = y as isize;
-                    first_non_space[&Up][x] = y as isize;
+                    self.last_non_space.get_mut(&Down).unwrap()[x] = y as isize;
+                    self.first_non_space.get_mut(&Up).unwrap()[x] = y as isize;
                 }
             }
        }
@@ -242,11 +240,13 @@ impl Map {
 
     // apply the instructions to the map
     pub fn apply_instructions(&mut self) {
-        for instruction in &self.instructions {
-            match instruction {
+        for i in 0..self.instructions.len() {
+            match self.instructions[i] {
                 Move(distance) => {
-                    for _ in 0..*distance {
-                        self.move_forward();
+                    for _ in 0..distance {
+                        if !self.move_forward() {
+                            break;
+                        };
                     }
                 },
                 TurnLeft => {
@@ -261,16 +261,16 @@ impl Map {
 
     // the position in the direction we are moving, either x or y
     fn get_idx_pos(&self) -> ( isize, isize ) {
-        if direction in [Right, Left] {
+        if self.direction == Right || self.direction == Left {
             return (self.position.y, self.position.x);
-        } else if direction in [Up, Down] {
-            return (self.position.x, self.position.y);
-        }
+        } 
+        //else if self.direction == Up || self.direction == Down {
+        return (self.position.x, self.position.y);        
     }
 
     fn at_last(&self) -> bool {
         let (idx, pos) = self.get_idx_pos();
-        let last = self.last_non_space[&self.direction][idx];
+        let last = self.last_non_space[&self.direction][idx as usize];
         return pos == last;
     }
 
@@ -278,28 +278,36 @@ impl Map {
         let (idx, pos) = self.get_idx_pos();
         if self.at_last() {
             let mut result = self.position.clone();
-            result.x = self.first_non_space[&self.direction][idx];
+            result.x = self.first_non_space[&self.direction][idx as usize];
             return result;
         } else {
             return self.position + self.direction.get_step();
         }
     }
 
+    fn get(&self, pos: Position) -> char {
+        return self.map[pos.y as usize][pos.x as usize];
+    }
+
     // move forward one step in the current direction, as long as the next step is a '.'.  If it is a '#', stop.  If it is a ' ' or the end of the map, wrap around to the first . in that direction.
-    fn move_forward(&mut self) {
-        let (next_idx, next_pos) = self.next_pos();
-        if self.map[next_idx][next_pos] == '.' {
-            self.position.x = next_pos;
-            self.position.y = next_idx;
-        } else if self.map[next_idx][next_pos] == '#' {
-            return;
-        } else if self.at_last() {
-            let first = self.first_non_space[&self.direction][next_idx];
-            self.position.x = first;
-            self.position.y = next_idx;
+    fn move_forward(&mut self) -> bool {
+        let next_pos = self.next_pos();
+        let c = self.get(next_pos);
+        if c == '.' {
+            self.position = next_pos;
+            return true;
+        } else {
+            return false;
         }
     }
 
+    fn turn_left(&mut self) {
+        self.direction = self.direction.turn_left();
+    }
+
+    fn turn_right(&mut self) {
+        self.direction = self.direction.turn_right();
+    }
 
 
 
@@ -348,5 +356,7 @@ mod tests {
         assert_eq!(map.instructions[10], Move(5));
         assert_eq!(map.instructions[11], TurnLeft);
         assert_eq!(map.instructions[12], Move(5));
+
+        println!("{}", map.format_map());
     }
 }
