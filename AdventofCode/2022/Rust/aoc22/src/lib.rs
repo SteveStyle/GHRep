@@ -2,6 +2,7 @@
 //use std::fmt::{Display, self};
 use std::fs;
 use chrono::Local;
+use path::Map;
 
 
 use crate::utils::Timer;
@@ -23,12 +24,12 @@ mod utils;
 mod path;
 
 fn get_contents() -> String {
-    //    const ROOT_PATH: &str = "/home/steve/GHRep/";
     println!("{}:  starting",Local::now().format("%Y-%m-%d %H:%M:%S%.6f"));
 
-    const ROOT_PATH: &str = "d:/GHRep/GHRep/";
+    const ROOT_PATH: &str = "/home/steve/GHRep/";
+//    const ROOT_PATH: &str = "d:/GHRep/GHRep/";
 
-    const FILE_NAME: &str = "AdventofCode/2022/data/input21.txt";
+    const FILE_NAME: &str = "AdventofCode/2022/data/input22.txt";
 
     let full_path = String::from(ROOT_PATH) + FILE_NAME;
 
@@ -57,12 +58,19 @@ pub fn show_totals() {
 
 //use crate::sprite::sprite;
 fn process_file_contents( contents: &str) -> isize {
-    return 0;
+    let mut map = Map::new(contents);
+    map.apply_instructions();
+
+    return map.get_password();
 }
 
 
 fn process_file_contents2( contents: &str) -> isize {
-    return 0;
+    let mut map = Map::new(contents);
+    map.glue_cube();
+    map.apply_instructions();
+
+    return map.get_password();
 }
 
 
