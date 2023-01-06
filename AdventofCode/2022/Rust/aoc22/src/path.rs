@@ -4,6 +4,9 @@ use std::{collections::HashMap, ops::{Add, Sub}};
 use Instruction::*;
 use Direction::*;
 
+use crate::pos::*;
+
+
 #[derive(Debug, PartialEq)]
 enum Instruction {
     Move(usize),
@@ -105,35 +108,6 @@ impl std::ops::Neg for Direction {
         }
     }
 }
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-struct Position {
-    x: isize,
-    y: isize,
-}
-// implement add and subtract for position
-impl std::ops::Add<Position> for Position {
-    type Output = Position;
-    fn add(self, other: Position) -> Position {
-        Position {
-            x: self.x + other.x,
-            y: self.y + other.y,
-        }
-    }
-}
-impl std::ops::Sub<Position> for Position {
-    type Output = Position;
-    fn sub(self, other: Position) -> Position {
-        Position {
-            x: self.x - other.x,
-            y: self.y - other.y,
-        }
-    }
-}
-// have constants for the four directions as Position objects
-const RIGHT : Position = Position { x:  1 , y:  0 };
-const DOWN  : Position = Position { x:  0 , y:  1 };
-const LEFT  : Position = Position { x: -1 , y:  0 };
-const UP    : Position = Position { x:  0 , y: -1 };
 
 
 #[derive(Debug, PartialEq, Clone, Copy)]

@@ -1,31 +1,29 @@
-pub mod pos;
-
-    #[derive(Debug, Clone, Copy)]
-    struct Pos {
-        x: i32,
-        y: i32,
-    }
-    
-    impl Add for Pos {
-        type Output = Pos;
-    
-        fn add(self, rhs: Self) -> Self::Output {
-            Pos { x: self.x + rhs.x, y: self.y + rhs.y }
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub struct Position {
+    pub x: isize,
+    pub y: isize,
+}
+// implement add and subtract for position
+impl std::ops::Add<Position> for Position {
+    type Output = Position;
+    fn add(self, other: Position) -> Position {
+        Position {
+            x: self.x + other.x,
+            y: self.y + other.y,
         }
     }
-    
-    impl Sub for Pos {
-        type Output = Pos;
-    
-        fn sub(self, rhs: Self) -> Self::Output {
-            Pos { x: self.x - rhs.x, y: self.y - rhs.y }
+}
+impl std::ops::Sub<Position> for Position {
+    type Output = Position;
+    fn sub(self, other: Position) -> Position {
+        Position {
+            x: self.x - other.x,
+            y: self.y - other.y,
         }
     }
-
-    impl PartialEq for Pos {
-        fn eq(&self, other: &Self) -> bool {
-            self.x == other.x && self.y == other.y
-        }
-    }
-    
-    impl Eq for Pos { }
+}
+// have constants for the four directions as Position objects
+pub const RIGHT : Position = Position { x:  1 , y:  0 };
+pub const DOWN  : Position = Position { x:  0 , y:  1 };
+pub const LEFT  : Position = Position { x: -1 , y:  0 };
+pub const UP    : Position = Position { x:  0 , y: -1 };

@@ -21,6 +21,7 @@ use crate::utils::Timer;
 
 
 mod utils;
+mod pos;
 mod path;
 
 fn get_contents() -> String {
