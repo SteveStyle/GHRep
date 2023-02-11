@@ -368,8 +368,12 @@ impl TileBag {
         self.add_tile(tile);
         other.remove_tile(tile);
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.count() == 0
+    }
     pub fn fill_rack(&mut self, bag: &mut TileBag) {
-        while self.count() < 7 {
+        while !bag.is_empty() && self.count() < 7 {
             let tile = bag.random_tile();
             self.add_tile(tile);
             bag.remove_tile(tile);

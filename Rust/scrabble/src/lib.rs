@@ -162,7 +162,8 @@ impl GameMove {
                     }
                     // otherwise we still have tiles to place
                     if allowed_letters.is_empty() {
-                        return Err(MoveError::NotEnoughSpaceForTiles(tiles_placed));
+                        move_position_map.max_tiles = tiles_placed;
+                        break;
                     }
                     if !allowed_letters.is_full() {
                         move_position_map.add(
@@ -203,9 +204,6 @@ impl GameMove {
                 break;
             }
         }
-        if tiles_placed < self.length {
-            return Err(MoveError::NotEnoughSpaceForTiles(tiles_placed));
-        }
         self.move_position_map = Some(move_position_map);
         Ok(())
     }
@@ -220,6 +218,7 @@ pub struct Game {
     pub bag: tiles::TileBag,
     pub next_player: usize, // index into `players`
     pub first_move: bool,
+    pub is_over: bool,
     pub scores: [u32; 2], // score for each player
     //  history of moves
     pub moves: Vec<GameMove>,
@@ -287,6 +286,7 @@ impl Game {
             bag,
             next_player,
             first_move: true,
+            is_over: false,
             moves,
             scores: [0, 0],
             local_word_list,
@@ -495,6 +495,11 @@ impl Game {
             }
         }
 
+        player_rack.fill_rack(&mut self.bag);
+
+        if player_rack.is_empty() {
+            self.is_over = true;
+        }
         self.next_player = (self.next_player + 1) % self.players.len();
 
         Ok(score)
@@ -506,6 +511,18 @@ impl Game {
         self.validate_move(&mut game_move, tiles)?;
         let score = self.apply_move(&game_move)?;
         Ok(score)
+    }
+
+    pub fn computer_move(&mut self) -> Result<u16, MoveError> {
+        let player = &self.players[self.next_player];
+        let mut best_score = 0;
+
+        let start_pos = Position::new(7, 7);
+        let mut game_move = GameMove::new(start_pos, Direction::Horizontal);
+        for 
+        let mut rack = self.players[self.next_player].rack.clone();
+        let mut tiles = TileList(vec![]);
+        Ok(best_score)
     }
 }
 
