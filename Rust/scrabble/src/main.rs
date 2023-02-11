@@ -18,6 +18,7 @@ fn main() {
     let mut game = Game::new(&SCRABBLE_VARIANT_WORDFEUD);
 
     // let the player input a move
+    /*
     let mut input = String::new();
     println!("Your rack is {} ", game.players[0].rack);
     println!("Enter a move: ");
@@ -25,23 +26,15 @@ fn main() {
 
     println!("You entered: {}", input);
 
-    let tiles: TileList = input.as_str().into();
 
-    let length = tiles.len() as u8;
+    match game.human_move(&input) {
+        Ok(_) => println!("{}", game),
+        Err(e) => println!("Move rejected: {:?}", e),
+    }
+    */
 
-    let mut game_move = GameMove {
-        position: Position::new(7, 7),
-        player: 0,
-        first_move: true,
-        direction: Direction::Horizontal,
-        length,
-        move_position_map: None,
-        word: None,
-        score: None,
-    };
-
-    game.validate_position(&mut game_move);
-    game.validate_move(&mut game_move, tiles);
+    game.computer_move();
+    println!("{}", game);
 }
 
 fn test_anagram_version() {

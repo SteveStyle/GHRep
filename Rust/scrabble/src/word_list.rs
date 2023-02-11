@@ -19,6 +19,7 @@ lazy_static! {
         WORD_FILE.split_whitespace().collect();
 }
 
+/*
 lazy_static! {
     pub static ref LETTER_PREFIXES: [LetterSet; 26] = ALPHABET
         .iter()
@@ -58,7 +59,7 @@ lazy_static! {
         })
         .collect::<[LetterSet; 26]>();
 }
-
+*/
 pub fn is_word(word: &str) -> bool {
     WORDS.contains(word)
 }

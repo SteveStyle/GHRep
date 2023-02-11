@@ -223,7 +223,13 @@ impl Display for Cell {
                 horizontal_letters,
                 vertical_letters,
             } => write!(f, "{} ", self.cell_type.as_char()),
-            CellValue::Filled { letter, is_blank } => write!(f, "{}", letter),
+            CellValue::Filled { letter, is_blank } => {
+                if is_blank {
+                    write!(f, "*{}", letter)
+                } else {
+                    write!(f, " {}", letter)
+                }
+            }
         }
     }
 }
@@ -439,7 +445,7 @@ pub struct Board {
 const VERTICAL_BORDER: char = '|';
 const HORIZONTAL_BORDER: char = '─';
 // line border is a string consisting of 2*BOARD_SIZE + 1 horizontal borders
-const LINE_BORDER: &str = "───────────────────────────────\n";
+const LINE_BORDER: &str = "──────────────────────────────────────────────\n";
 
 // TO DO: use unicode box drawing characters
 // https://en.wikipedia.org/wiki/Box-drawing_character
@@ -515,10 +521,12 @@ impl Board {
 
         let mut pos = wp.start_pos;
         let mut word = String::from(self.get_cell_pos(pos).as_filled().unwrap().as_char());
-        while let Some(pos) = pos.try_step_forward(&direction) {
-            word.push(self.get_cell_pos(pos).as_filled().unwrap().as_char());
-            if pos == wp.end_pos {
-                break;
+        if pos != wp.end_pos {
+            while let Some(pos) = pos.try_step_forward(&direction) {
+                word.push(self.get_cell_pos(pos).as_filled().unwrap().as_char());
+                if pos == wp.end_pos {
+                    break;
+                }
             }
         }
         word

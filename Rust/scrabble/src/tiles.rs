@@ -285,10 +285,10 @@ impl TileBag {
     fn add_blank(&mut self) {
         self.blanks += 1;
     }
-    fn remove_letter(&mut self, letter: Letter) {
+    pub(crate) fn remove_letter(&mut self, letter: Letter) {
         self.letters[letter.as_usize()] -= 1;
     }
-    fn remove_blank(&mut self) {
+    pub(crate) fn remove_blank(&mut self) {
         self.blanks -= 1;
     }
     fn count(&self) -> u8 {
@@ -302,7 +302,7 @@ impl TileBag {
             } => self.blanks,
         }
     }
-    fn count_letter(&self, letter: Letter) -> u8 {
+    pub(crate) fn count_letter(&self, letter: Letter) -> u8 {
         self.letters[letter.as_usize()]
     }
     fn count_blanks(&self) -> u8 {
@@ -425,11 +425,12 @@ impl From<&str> for TileList {
     fn from(s: &str) -> Self {
         let mut vec = Vec::new();
         let mut index = 0;
+        let s = s.trim().to_uppercase();
         while index < s.len() {
             let c = s.chars().nth(index).unwrap();
             if c == '*' {
                 if let Some(next) = s.chars().nth(index + 1) {
-                    if next.is_alphabetic() {
+                    if next.is_ascii_uppercase() {
                         vec.push(Tile::Blank {
                             acting_as_letter: Some(next.into()),
                         });
@@ -444,7 +445,7 @@ impl From<&str> for TileList {
                         acting_as_letter: None,
                     });
                 }
-            } else {
+            } else if c.is_ascii_uppercase() {
                 vec.push(Tile::Letter(c.into()));
             }
             index += 1;
