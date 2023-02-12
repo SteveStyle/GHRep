@@ -503,6 +503,7 @@ impl Game {
             self.is_over = true;
         }
         self.next_player = (self.next_player + 1) % self.players.len();
+        self.first_move = false;
 
         Ok(score)
     }
