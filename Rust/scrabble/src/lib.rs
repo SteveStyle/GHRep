@@ -94,7 +94,7 @@ pub struct GameMove {
     pub player: usize,
     pub direction: Direction,
     pub first_move: bool,
-    pub position: Position,
+    pub starting_position: Position,
     pub length: u8,
     pub move_position_map: Option<MovePositionMap>,
     pub word: Option<String>,
@@ -113,7 +113,7 @@ impl GameMove {
             player,
             direction,
             first_move,
-            position,
+            starting_position: position,
             length,
             move_position_map: None,
             word: None,
@@ -131,7 +131,7 @@ impl GameMove {
             word_multiplier: 1,
         };
         let mut enabler_found = false;
-        let mut current_pos = self.position;
+        let mut current_pos = self.starting_position;
         while let Some(previous_pos) = current_pos.try_step_backward(&self.direction) {
             if board.get_cell_pos(previous_pos).is_filled() {
                 current_pos = previous_pos;
@@ -516,7 +516,7 @@ impl Game {
 
         let length = tiles.len() as u8;
         let mut game_move = GameMove {
-            position: Position::new(7, 7),
+            starting_position: Position::new(7, 7),
             player: 0,
             first_move: true,
             direction: Direction::Horizontal,
@@ -534,9 +534,11 @@ impl Game {
         Ok(score)
     }
 
+    // recursive function to find the best move for a given position
     fn computer_move_position(
         &mut self,
-        best_move: &mut GameMove,
+        best_move: &mut GameMove, // the best move found so far, the contents will be updated if a better move is found
+        pos_ref_move: &GameMove,  // contains the starting position and min/max tiles
         current_tile_list: TileList,
         current_rack: TileBag,
     ) {
@@ -547,7 +549,7 @@ impl Game {
         if (current_tile_list.0.len() as u8) >= min_tiles {
             //let try_move = &mut best_move.clone();
             let try_move = &mut GameMove {
-                position: best_move.position,
+                starting_position: best_move.starting_position,
                 player: best_move.player,
                 first_move: best_move.first_move,
                 direction: best_move.direction,
