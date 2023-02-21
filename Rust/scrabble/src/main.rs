@@ -6,6 +6,7 @@ use scrabble::*;
 use chrono::Local;
 use scrabble::pos::Position;
 use scrabble::tiles::{Letter, TileList};
+use scrabble::word_list::is_word;
 
 use crate::utils::Timer;
 
@@ -33,8 +34,33 @@ fn main() {
     }
     */
 
-    game.computer_move();
+    // force initialisation of the word list hash set
+    is_word("BADE");
+
+    let timer = Timer::new("show_totals()");
+
+    let mut result1 = game.computer_move();
+    while !game.is_over {
+        result1 = game.computer_move();
+    }
+    //let result2 = game.computer_move();
+
+    let elapsed = timer.elapsed();
+
     println!("{}", game);
+
+    println!("Time taken: {} seconds", elapsed.as_secs_f64());
+
+    println!("result1: {:?}", result1);
+    //println!("result2: {:?}", result2);
+
+    // print the cells at (7,6), (8,7) and (9,8)
+    println!(
+        "three positions:{:?} {:?} {:?}:end",
+        game.board.get_cell_pos(Position::new(7, 6)),
+        game.board.get_cell_pos(Position::new(8, 7)),
+        game.board.get_cell_pos(Position::new(9, 8))
+    );
 }
 
 fn test_anagram_version() {

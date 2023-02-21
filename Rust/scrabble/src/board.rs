@@ -6,6 +6,7 @@ use crate::pos::Position;
 use crate::tiles::Letter;
 use crate::tiles::ALPHABET;
 use crate::Direction;
+use crate::MoveError;
 
 use crate::tiles::LetterSet;
 use crate::tiles::Tile;
@@ -44,8 +45,8 @@ impl Display for CellValue {
 }
 
 impl CellValue {
-    pub(crate) fn as_filled(&self) -> Option<&Letter> {
-        if let Self::Filled { letter, is_blank } = self {
+    pub(crate) fn as_filled(&self) -> Option<Letter> {
+        if let Self::Filled { letter, is_blank } = *self {
             Some(letter)
         } else {
             None
@@ -211,7 +212,7 @@ impl CellType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Cell {
+pub struct Cell {
     pub(crate) value: CellValue,
     pub(crate) cell_type: CellType,
 }
@@ -222,12 +223,23 @@ impl Display for Cell {
             CellValue::Empty {
                 horizontal_letters,
                 vertical_letters,
-            } => write!(f, "{} ", self.cell_type.as_char()),
+            } => write!(
+                f,
+                "{}{} {} {}",
+                BOLDON,
+                TILECOLOUR,
+                self.cell_type.as_char(),
+                BOLDOFF
+            ),
             CellValue::Filled { letter, is_blank } => {
                 if is_blank {
-                    write!(f, "*{}", letter)
+                    write!(
+                        f,
+                        "{}{}{}{}{} {}",
+                        BOLDON, BLANKCOLOUR, "*", LETTERCOLOUR, letter, BOLDOFF
+                    )
                 } else {
-                    write!(f, " {}", letter)
+                    write!(f, "{} {}{} {}", BOLDOFF, LETTERCOLOUR, letter, BOLDOFF)
                 }
             }
         }
@@ -253,7 +265,7 @@ impl Cell {
         self.value.is_filled()
     }
 
-    pub(crate) fn as_filled(&self) -> Option<&Letter> {
+    pub(crate) fn as_filled(&self) -> Option<Letter> {
         self.value.as_filled()
     }
 
@@ -438,14 +450,18 @@ pub const SCRABBLE_VARIANT_WORDFEUD: ScrabbleVariant = ScrabbleVariant {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Board {
-    pub(crate) variant: &'static ScrabbleVariant,
+    pub(crate) scrabble_variant: &'static ScrabbleVariant,
     pub(crate) cells: [Cell; 225],
 }
 
-const VERTICAL_BORDER: char = '|';
+//const VERTICAL_BORDER: char = '|';
+const VERTICAL_BORDER: char = '\u{2502}';
 const HORIZONTAL_BORDER: char = '─';
 // line border is a string consisting of 2*BOARD_SIZE + 1 horizontal borders
-const LINE_BORDER: &str = "──────────────────────────────────────────────\n";
+const HORIZONTAL_LINE: char = '\u{2501}';
+const TOP_BORDER: &str = "\u{250c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{2510}\n";
+const MIDDLE_BORDER: &str = "\u{251c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{2524}\n";
+const BOTTOM_BORDER: &str = "\u{2514}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2518}\n";
 
 // TO DO: use unicode box drawing characters
 // https://en.wikipedia.org/wiki/Box-drawing_character
@@ -455,17 +471,25 @@ const LINE_BORDER: &str = "─────────────────�
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = String::new();
+        let mut first_line = true;
+        write!(f, "{}", BACKGROUND);
+        write!(f, "{}", GRIDCOLOUR);
         for y in 0..15 {
-            s.push_str(&LINE_BORDER);
+            if first_line {
+                s.push_str(&TOP_BORDER);
+                first_line = false;
+            } else {
+                s.push_str(&MIDDLE_BORDER);
+            }
             for x in 0..15 {
                 s.push(VERTICAL_BORDER);
-                s.push_str(&format!("{}", self.get_cell(x, y)));
+                s.push_str(&format!("{}{}", self.get_cell(x, y), GRIDCOLOUR));
             }
             s.push(VERTICAL_BORDER);
             s.push('\n');
         }
-        s.push_str(&LINE_BORDER);
-        write!(f, "{}", s)
+        s.push_str(&BOTTOM_BORDER);
+        write!(f, "{}{}", s, RESET)
     }
 }
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -473,7 +497,6 @@ pub struct WordPositions {
     pub start_pos: Position,
     pub end_pos: Position,
 }
-
 impl Board {
     pub(crate) fn get_cell(&self, x: u8, y: u8) -> &Cell {
         &self.cells[(y * 15 + x) as usize]
@@ -481,7 +504,7 @@ impl Board {
     pub(crate) fn get_cell_mut<'a>(&'a mut self, x: u8, y: u8) -> &'a mut Cell {
         &mut self.cells[(y * 15 + x) as usize]
     }
-    pub(crate) fn get_cell_pos(&self, pos: Position) -> &Cell {
+    pub fn get_cell_pos(&self, pos: Position) -> &Cell {
         &self.cells[(pos.y * 15 + pos.x) as usize]
     }
     pub(crate) fn get_cell_pos_mut<'a>(&'a mut self, pos: Position) -> &'a mut Cell {
@@ -489,7 +512,7 @@ impl Board {
     }
     pub(crate) fn new(variant: &'static ScrabbleVariant) -> Board {
         let mut board = Board {
-            variant,
+            scrabble_variant: variant,
             cells: [Cell {
                 value: CellValue::Empty {
                     horizontal_letters: LetterSet::new_full(),
@@ -522,50 +545,56 @@ impl Board {
         let mut pos = wp.start_pos;
         let mut word = String::from(self.get_cell_pos(pos).as_filled().unwrap().as_char());
         if pos != wp.end_pos {
-            while let Some(pos) = pos.try_step_forward(&direction) {
-                word.push(self.get_cell_pos(pos).as_filled().unwrap().as_char());
-                if pos == wp.end_pos {
+            while let Some(pos_next) = pos.try_step_forward(direction) {
+                word.push(self.get_cell_pos(pos_next).as_filled().unwrap().as_char());
+                if pos_next == wp.end_pos {
                     break;
                 }
+                pos = pos_next;
             }
         }
         word
     }
 
-    pub fn update_word_gaps(&mut self, central_word: WordPositions, direction: Direction) {
+    pub fn read_word_at_pos(&self, reference_position: Position, direction: Direction) -> String {
+        let mut pos_iterator = self.start_of_word(reference_position, direction);
+        let mut word = String::new();
+        while let Some(next_position) = pos_iterator.try_step_forward(direction) {
+            match self.get_cell_pos(next_position).value {
+                CellValue::Empty { .. } => break,
+                CellValue::Filled { letter, .. } => word.push(letter.as_char()),
+            }
+            pos_iterator = next_position;
+        }
+        word
+    }
+
+    /*
+    For a given cell identify the word it is contained in, the central word.
+    Also, if they exist, the previous word and the next word. A gap of only one cell is allowed.
+    Update these gap cells with the letters that can be played in them.
+    */
+    pub fn update_word_gaps(&mut self, reference_position: Position, direction: Direction) {
         // assume central word is surrounded by empty cells or the board edge
         let mut previous_word: String = String::new();
+        let mut central_word = self.read_word_at_pos(reference_position, direction);
         let mut next_word: String = String::new();
-        let central_word_string = self.read_word(central_word, direction);
 
-        let mut pos = central_word.start_pos;
-        if let Some(pos) = pos.try_step_backward(&direction) {
+        let mut pos = self.start_of_word(reference_position, direction);
+        if let Some(previous_gap) = pos.try_step_backward(direction) {
             // there is an empty cell, not the board edge
-            let previous_gap = pos;
-            if let Some(pos) = pos.try_step_backward(&direction) {
-                if self.get_cell_pos(pos).value.is_filled() {
-                    // there is a previous word, not another empty cell or the board edge
-                    let mut previous_word_start = pos;
-                    let previous_word_end = pos;
-                    while let Some(pos) = pos.try_step_backward(&direction) {
-                        if self.get_cell_pos(pos).value.is_filled() {
-                            previous_word_start = pos;
-                        } else {
-                            break;
-                        }
+            if let Some(pos) = previous_gap.try_step_backward(direction) {
+                match self.get_cell_pos(pos).value {
+                    CellValue::Filled { .. } => {
+                        // there is a previous word, not another empty cell or the board edge
+                        previous_word = self.read_word_at_pos(pos, direction);
                     }
-                    previous_word = self.read_word(
-                        WordPositions {
-                            start_pos: previous_word_start,
-                            end_pos: previous_word_end,
-                        },
-                        direction,
-                    );
+                    _ => {}
                 }
             }
             let mut ls = LetterSet::new_empty();
             for l in ALPHABET {
-                if is_word(format!("{}{}{}", previous_word, l, central_word_string).as_str()) {
+                if is_word(format!("{}{}{}", previous_word, l, central_word).as_str()) {
                     ls.add(*l);
                 }
             }
@@ -574,34 +603,21 @@ impl Board {
                 .set_letter_set(-direction, ls);
         }
 
-        let mut pos = central_word.end_pos;
-        if let Some(pos) = pos.try_step_forward(&direction) {
+        let mut pos = self.end_of_word(pos, direction);
+        if let Some(next_gap) = pos.try_step_forward(direction) {
             // there is an empty cell, not the board edge
-            let next_gap = pos;
-            if let Some(pos) = pos.try_step_forward(&direction) {
-                if self.get_cell_pos(pos).value.is_filled() {
-                    // there is a next word, not another empty cell or the board edge
-                    let next_word_start = pos;
-                    let mut next_word_end = pos;
-                    while let Some(pos) = pos.try_step_forward(&direction) {
-                        if self.get_cell_pos(pos).value.is_filled() {
-                            next_word_end = pos;
-                        } else {
-                            break;
-                        }
+            if let Some(pos) = next_gap.try_step_forward(direction) {
+                match self.get_cell_pos(pos).value {
+                    CellValue::Filled { .. } => {
+                        // there is a next word, not another empty cell or the board edge
+                        next_word = self.read_word_at_pos(pos, direction);
                     }
-                    next_word = self.read_word(
-                        WordPositions {
-                            start_pos: next_word_start,
-                            end_pos: next_word_end,
-                        },
-                        direction,
-                    );
+                    _ => {}
                 }
             }
             let mut ls = LetterSet::new_empty();
             for l in ALPHABET {
-                if is_word(format!("{}{}{}", central_word_string, l, next_word).as_str()) {
+                if is_word(format!("{}{}{}", central_word, l, next_word).as_str()) {
                     ls.add(*l);
                 }
             }
@@ -610,7 +626,219 @@ impl Board {
                 .set_letter_set(-direction, ls);
         }
     }
+
+    pub fn score_cross_word(
+        &self,
+        central_position: Position,
+        direction: Direction,
+        central_tile: Tile,
+        central_letter: Letter,
+    ) -> Result<u16, MoveError> {
+        let mut cross_score = 0u16;
+        let mut cross_pos = central_position;
+        let central_cell = self.get_cell_pos(central_position);
+
+        // get the letters and score of the preceding tiles
+        let mut previous_letters: Vec<Letter> = vec![];
+        while let Some(cross_pos_next) = cross_pos.try_step_backward(direction) {
+            match self.get_cell_pos(cross_pos_next).value {
+                CellValue::Filled { letter, is_blank } => {
+                    previous_letters.push(letter);
+                    cross_score += if is_blank {
+                        0
+                    } else {
+                        self.scrabble_variant.letter_values[letter.as_usize()] as u16
+                    };
+                }
+                CellValue::Empty { .. } => break,
+            }
+            cross_pos = cross_pos_next;
+        }
+
+        let mut cross_word = String::new();
+        for letter in previous_letters.iter().rev() {
+            cross_word.push(letter.as_char());
+        }
+
+        // add the letter and score of the central tile
+        cross_word.push(central_letter.as_char());
+        cross_score += (central_tile.score(self.scrabble_variant)
+            * central_cell.cell_type.letter_multiplier()) as u16;
+
+        // get the letters and score of the following tiles
+        cross_pos = central_position;
+        while let Some(cross_pos_next) = cross_pos.try_step_forward(direction) {
+            match self.get_cell_pos(cross_pos_next).value {
+                CellValue::Filled { letter, is_blank } => {
+                    cross_word.push(letter.as_char());
+                    cross_score += if is_blank {
+                        0
+                    } else {
+                        self.scrabble_variant.letter_values[letter.as_usize()] as u16
+                    };
+                }
+                CellValue::Empty { .. } => break,
+            }
+            cross_pos = cross_pos_next;
+        }
+
+        if !is_word(&cross_word) {
+            return Err(MoveError::InvalidWord(cross_word));
+        }
+        Ok(cross_score * central_cell.cell_type.word_multiplier() as u16)
+    }
+
+    pub fn start_of_word(&self, reference_pos: Position, direction: Direction) -> Position {
+        let mut pos_iterator = reference_pos;
+        let mut start_pos = pos_iterator;
+        while let Some(next_pos) = pos_iterator.try_step_backward(direction) {
+            match self.get_cell_pos(next_pos).value {
+                CellValue::Empty { .. } => break,
+                CellValue::Filled { .. } => {
+                    start_pos = next_pos;
+                }
+            }
+            pos_iterator = next_pos;
+        }
+        start_pos
+    }
+
+    pub fn end_of_word(&self, reference_position: Position, direction: Direction) -> Position {
+        let mut pos_iterator = reference_position;
+        let mut end_pos = pos_iterator;
+        while let Some(next_pos) = pos_iterator.try_step_forward(direction) {
+            match self.get_cell_pos(next_pos).value {
+                CellValue::Empty { .. } => break,
+                CellValue::Filled { .. } => {
+                    end_pos = next_pos;
+                }
+            }
+            pos_iterator = next_pos;
+        }
+        end_pos
+    }
+
+    pub fn move_iterator(&self, starting_position: Position, direction: Direction) -> MoveIterator {
+        MoveIterator::new(
+            self,
+            self.start_of_word(starting_position, direction),
+            direction,
+        )
+    }
 }
+
+pub enum MoveCell {
+    Open,
+    Connecting { letter_set: LetterSet },
+    Filled { letter: Letter, score: u16 },
+}
+
+pub struct MoveIterator<'a> {
+    board: &'a Board,
+    direction: Direction,
+
+    pos: Position,
+    tiles_placed: u8,
+    reached_end: bool,
+}
+
+impl<'a> MoveIterator<'a> {
+    pub fn new(
+        board: &'a Board,
+        starting_position: Position,
+        direction: Direction,
+    ) -> MoveIterator<'a> {
+        MoveIterator {
+            board,
+            direction,
+            pos: starting_position,
+            tiles_placed: 0,
+            reached_end: false,
+        }
+    }
+}
+
+impl Iterator for MoveIterator<'_> {
+    type Item = (Position, MoveCell);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.reached_end {
+            return None;
+        }
+        let cell = self.board.get_cell_pos(self.pos);
+        let result = match cell.value {
+            CellValue::Empty {
+                horizontal_letters,
+                vertical_letters,
+            } => {
+                let letter_set = match self.direction {
+                    Direction::Horizontal => horizontal_letters,
+                    Direction::Vertical => vertical_letters,
+                };
+                if letter_set.is_empty() {
+                    None
+                } else {
+                    if self.tiles_placed == 7 {
+                        None
+                    } else {
+                        self.tiles_placed += 1;
+                        if letter_set.is_full() {
+                            Some((self.pos, MoveCell::Open))
+                        } else {
+                            Some((self.pos, MoveCell::Connecting { letter_set }))
+                        }
+                    }
+                }
+            }
+            CellValue::Filled { letter, is_blank } => {
+                let score = if is_blank {
+                    0
+                } else {
+                    self.board.scrabble_variant.letter_values[letter.as_usize()] as u16
+                };
+                Some((self.pos, MoveCell::Filled { letter, score }))
+            }
+        };
+        if let Some(pos) = self.pos.try_step_forward(self.direction) {
+            self.pos = pos;
+        } else {
+            self.reached_end = true;
+        };
+        result
+    }
+}
+const CLS: &str = "\x1B[2J";
+const HOME: &str = "\x1B[H";
+const RED: &str = "\x1B[31m";
+const GREEN: &str = "\x1B[32m";
+const BLUE: &str = "\x1B[34m";
+const YELLOW: &str = "\x1B[33m";
+const MAGENTA: &str = "\x1B[35m";
+const CYAN: &str = "\x1B[36m";
+const WHITE: &str = "\x1B[37m";
+const BLACK: &str = "\x1B[30m";
+const RESET: &str = "\x1B[0m";
+const BOLDON: &str = "\x1B[1m";
+const BOLDOFF: &str = "\x1B[22m";
+const BACKGROUNDWHITE: &str = "\x1B[47m";
+const BACKGROUNDRED: &str = "\x1B[41m";
+const BACKGROUNDGREEN: &str = "\x1B[42m";
+const BACKGROUNDYELLOW: &str = "\x1B[43m";
+const BACKGROUNDBLUE: &str = "\x1B[44m";
+const BACKGROUNDMAGENTA: &str = "\x1B[45m";
+const BACKGROUNDCYAN: &str = "\x1B[46m";
+const BACKGROUNDRESET: &str = "\x1B[49m";
+const UNDERLINEON: &str = "\x1B[4m";
+const UNDERLINEOFF: &str = "\x1B[24m";
+const BACKGROUNDBLACK: &str = "\x1B[40m";
+
+const GRIDCOLOUR: &str = WHITE;
+const TILECOLOUR: &str = BLUE;
+const BLANKCOLOUR: &str = MAGENTA;
+const LETTERCOLOUR: &str = WHITE;
+const SCORECOLOUR: &str = MAGENTA;
+const WORDCOLOUR: &str = CYAN;
+const BACKGROUND: &str = BACKGROUNDBLACK;
 
 //test board
 #[cfg(test)]
@@ -632,5 +860,70 @@ mod tests {
                 println!("{}: {}", n, "not a char");
             }
         }
+    }
+    #[test]
+    fn test_box_drawing() {
+        for n in 0x2500..0x257F {
+            if let Some(c) = std::char::from_u32(n) {
+                println!("{:x}: {}", n, c);
+            } else {
+                println!("{:x}: {}", n, "not a char");
+            }
+        }
+        println!("{:x}: {}", HORIZONTAL_BORDER as u32, HORIZONTAL_BORDER);
+        println!("{:x}: {}", HORIZONTAL_LINE as u32, HORIZONTAL_LINE);
+        println!("{}", TOP_BORDER);
+        println!("{}", MIDDLE_BORDER);
+        println!("{}", BOTTOM_BORDER);
+
+        // use ANSI escape codes to clear the screen
+        print!("\x1B[2J\x1B[1;1H");
+        println!("{}", TOP_BORDER);
+    }
+
+    #[test]
+    // use ANSI escape codes to change the color
+    fn test_color() {
+        print!("\x1B[2J\x1B[1;1H");
+
+        // ANSI escape code to change the color to red
+        print!("\x1B[31m");
+        println!("{}", "red");
+        // ANSI escape code to change the color to green
+        print!("\x1B[32m");
+        println!("{} ", "green");
+        // ANSI escape code to change the color to blue
+        print!("\x1B[34m");
+        println!("{} ", "blue");
+        // ANSI escape code to change the color to yellow
+        print!("\x1B[33m");
+        println!("{} ", "yellow");
+        // ANSI escape code to change the color to magenta
+        print!("\x1B[35m");
+        println!("{} ", "magenta");
+        // ANSI escape code to change the color to cyan
+        print!("\x1B[36m");
+        println!("{} ", "cyan");
+        // ANSI escape code to change the color to white
+        print!("\x1B[37m");
+        println!("{} ", "white");
+        // ANSI escape code to change the color to reset
+        print!("\x1B[0m");
+        println!("{} ", "reset");
+        // ANSI escape code to change the color to bold
+        print!("\x1B[1m");
+        println!("{} ", "bold");
+        // ANSI escape code to change the color to underline
+        print!("\x1B[4m");
+        println!("{} ", "underline");
+        // ANSI escape code to change the color to blink
+        print!("\x1B[5m");
+        println!("{} ", "blink");
+        // ANSI escape code to change the color to reverse
+        print!("\x1B[7m");
+        println!("{} ", "reverse");
+        // ANSI escape code to change the color to hidden
+        print!("\x1B[8m");
+        println!("{} ", "hidden");
     }
 }

@@ -2,10 +2,11 @@ use std::{
     collections::HashSet,
     fmt::{Display, Formatter},
     ops::Neg,
+    sync::atomic::AtomicBool,
     thread::current,
 };
 
-use board::{CellValue, WordPositions};
+use board::{Board, CellValue, MoveCell, WordPositions};
 use pos::Position;
 use rand::seq::index;
 use tiles::{Letter, LetterSet, Tile, TileBag, TileList, ALPHABET};
@@ -30,6 +31,8 @@ pub struct Player {
     pub player_type: PlayerType,
     pub rack: tiles::TileBag,
     pub name: String,
+    pub passes: u8,
+    pub exchanges: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -56,26 +59,10 @@ impl Direction {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MovePositionType {
-    Open {
-        tile: Option<Tile>,
-    },
-    Connecting {
-        tile: Option<Tile>,
-        letter_set: LetterSet,
-        start_pos: Option<Position>,
-        end_pos: Option<Position>,
-        connecting_word: Option<String>,
-    },
-    Filled {
-        letter: Letter,
-    },
-}
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+
 pub struct MovePositionMap {
     positions: Vec<Position>,
-    position_types: Vec<MovePositionType>,
+    position_types: Vec<MoveCell>,
     previous_cell_pos: Option<Position>,
     next_cell_pos: Option<Position>,
     min_tiles: u8,
@@ -84,131 +71,43 @@ pub struct MovePositionMap {
 }
 
 impl MovePositionMap {
-    pub fn add(&mut self, position: Position, position_type: MovePositionType) {
+    pub fn add(&mut self, position: Position, position_type: MoveCell) {
         self.positions.push(position);
         self.position_types.push(position_type);
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GameMove {
-    pub player: usize,
-    pub direction: Direction,
-    pub first_move: bool,
+    //    pub player: usize,
     pub starting_position: Position,
-    pub length: u8,
-    pub move_position_map: Option<MovePositionMap>,
-    pub word: Option<String>,
+    pub direction: Direction,
+    pub tiles: TileList,
     pub score: u16,
 }
 
 impl GameMove {
     pub fn new(
-        player: usize,
+        starting_position: Position,
         direction: Direction,
-        first_move: bool,
-        position: Position,
-        length: u8,
+        tiles: TileList,
+        score: u16,
     ) -> Self {
         Self {
-            player,
+            starting_position,
             direction,
-            first_move,
-            starting_position: position,
-            length,
-            move_position_map: None,
-            word: None,
-            score: 0,
+            tiles,
+            score,
         }
     }
-    pub fn generate_position_map(&mut self, board: &board::Board) -> Result<(), MoveError> {
-        let mut move_position_map = MovePositionMap {
-            positions: Vec::new(),
-            position_types: Vec::new(),
-            previous_cell_pos: None,
-            next_cell_pos: None,
-            min_tiles: 0,
-            max_tiles: 7,
-            word_multiplier: 1,
-        };
-        let mut enabler_found = false;
-        let mut current_pos = self.starting_position;
-        while let Some(previous_pos) = current_pos.try_step_backward(&self.direction) {
-            if board.get_cell_pos(previous_pos).is_filled() {
-                current_pos = previous_pos;
-            } else {
-                move_position_map.previous_cell_pos = Some(previous_pos);
+    pub fn get_main_word_start_pos(&self, board: &board::Board) -> Position {
+        let mut current_position = self.starting_position;
+        while let Some(next_position) = current_position.try_step_backward(self.direction) {
+            if board.get_cell_pos(next_position).is_empty() {
                 break;
             }
+            current_position = next_position;
         }
-        let mut tiles_placed = 0u8;
-        /*  Loop through all the cells involved in the move and add them
-           to the move_position_map.
-           End the loop when:
-               - we reach the edge of the board or
-               - we reach an empty cell but have already placed all the tiles
-        */
-        loop {
-            let cell = board.get_cell_pos(current_pos);
-            let is_enabler = board.is_enabler(current_pos);
-            let cell_value = &cell.value;
-            let word_multiplier = cell.cell_type.word_multiplier();
-            let allowed_letters = cell_value.allowed_letters(self.direction);
-            match cell_value {
-                CellValue::Empty {
-                    horizontal_letters: _,
-                    vertical_letters: _,
-                } => {
-                    if tiles_placed == self.length {
-                        // We have placed all the tiles, so we finish the loop
-                        move_position_map.next_cell_pos = Some(current_pos);
-                        break;
-                    }
-                    // otherwise we still have tiles to place
-                    if allowed_letters.is_empty() {
-                        move_position_map.max_tiles = tiles_placed;
-                        break;
-                    }
-                    if !allowed_letters.is_full() {
-                        move_position_map.add(
-                            current_pos,
-                            MovePositionType::Connecting {
-                                tile: None,
-                                letter_set: allowed_letters.clone(),
-                                start_pos: None,
-                                end_pos: None,
-                                connecting_word: None,
-                            },
-                        );
-                    } else {
-                        move_position_map.add(current_pos, MovePositionType::Open { tile: None });
-                    }
-                    move_position_map.word_multiplier *= word_multiplier;
-                    tiles_placed += 1;
-                }
-                CellValue::Filled {
-                    letter,
-                    is_blank: _,
-                } => move_position_map.add(
-                    current_pos,
-                    MovePositionType::Filled {
-                        letter: letter.clone(),
-                    },
-                ),
-            }
-            if !enabler_found && is_enabler {
-                move_position_map.min_tiles = tiles_placed;
-                enabler_found = true;
-            }
-
-            if let Some(next_pos) = current_pos.try_step_forward(&self.direction) {
-                current_pos = next_pos;
-            } else {
-                // We have reached the edge of the board
-                break;
-            }
-        }
-        self.move_position_map = Some(move_position_map);
-        Ok(())
+        current_position
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,12 +116,15 @@ pub struct Game {
     scrabble_variant: &'static board::ScrabbleVariant,
     //  mutable part of the game
     pub players: [Player; 2],
-    board: board::Board,
+    pub board: board::Board,
     pub bag: tiles::TileBag,
-    pub next_player: usize, // index into `players`
+    pub current_player: usize, // index into `players`
     pub first_move: bool,
     pub is_over: bool,
-    pub scores: [u32; 2], // score for each player
+    pub last_player_to_play: Option<usize>,
+    pub winner: Option<usize>,
+    pub non_scoring_plays: u8,
+    pub scores: [u16; 2], // score for each player
     //  history of moves
     pub moves: Vec<GameMove>,
     //local_word_list: HashSet<String>,
@@ -230,6 +132,7 @@ pub struct Game {
 
 impl Display for Game {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\x1B[2J\x1B[1;1H")?;
         writeln!(f, "Board:")?;
         writeln!(f, "{}", self.board)?;
         writeln!(f, "Bag: {}", self.bag)?;
@@ -258,6 +161,7 @@ pub enum MoveError {
     NoTilesPassed,
     NotEnoughSpaceForTiles(u8),
     BlockingEmptyCellFound,
+    NotEnoughTilesInBag,
 }
 
 impl Game {
@@ -269,11 +173,15 @@ impl Game {
                 player_type: PlayerType::Human,
                 rack: TileBag::new_empty(),
                 name: "Player 1".to_string(),
+                passes: 0,
+                exchanges: 0,
             },
             Player {
                 player_type: PlayerType::Computer,
                 rack: TileBag::new_empty(),
                 name: "Player 2".to_string(),
+                passes: 0,
+                exchanges: 0,
             },
         ];
         players[0].rack.fill_rack(&mut bag);
@@ -287,122 +195,127 @@ impl Game {
             players,
             board,
             bag,
-            next_player,
+            current_player: next_player,
             first_move: true,
             is_over: false,
-            moves,
+            last_player_to_play: None,
+            winner: None,
+            non_scoring_plays: 0,
             scores: [0, 0],
+            moves,
             //  local_word_list,
         }
     }
 
     // returns the positions of each tile and the positions of filled cells
-
-    pub fn validate_position(&self, game_move: &mut GameMove) -> Result<(), MoveError> {
-        game_move.generate_position_map(&self.board)
+    pub fn validate_position(
+        &self,
+        starting_position: Position,
+        direction: Direction,
+    ) -> Result<(u8, u8), MoveError> {
+        // if valid returns the min and max number of tiles that can be placed
+        let mut tiles_placed = 0u8;
+        let mut min_tiles = 0u8;
+        //let mut max_tiles = 0u8;
+        /*  Loop through all the cells involved in the move
+           End the loop when:
+               - we reach the edge of the board or
+               - we reach an empty cell but have already placed all the tiles
+        */
+        for (current_pos, move_cell) in self.board.move_iterator(starting_position, direction) {
+            match move_cell {
+                MoveCell::Open => {
+                    // we can place a tile here
+                    tiles_placed += 1;
+                }
+                MoveCell::Connecting { letter_set } => {
+                    if letter_set.allows_rack(&self.players[self.current_player].rack) {
+                        // we can place a tile here
+                        tiles_placed += 1;
+                        if min_tiles == 0 {
+                            min_tiles = tiles_placed;
+                        }
+                    } else {
+                        // we are blocked
+                        break;
+                    }
+                }
+                MoveCell::Filled { .. } => {
+                    if min_tiles == 0 {
+                        if tiles_placed == 0 {
+                            min_tiles = 1;
+                        } else {
+                            min_tiles = tiles_placed;
+                        }
+                    }
+                }
+            }
+            if min_tiles == 0 && current_pos == (Position { x: 7, y: 7 }) {
+                min_tiles = tiles_placed;
+            }
+        }
+        if min_tiles == 0 {
+            return Err(MoveError::TilesDoNotConnect);
+        }
+        Ok((min_tiles, tiles_placed))
     }
 
     pub fn validate_move(
         &self,
-        game_move: &mut GameMove,
+        starting_position: Position,
+        direction: Direction,
         tiles: &TileList,
-    ) -> Result<(), MoveError> {
-        assert_eq!(game_move.player, self.next_player);
-        let player = &self.players[self.next_player];
+    ) -> Result<u16, MoveError> {
+        // returns the score of the move
         // check that the tiles are in the rack
-        player.rack.confirm_contains_tile_list(&tiles);
+        self.players[self.current_player]
+            .rack
+            .confirm_contains_tile_list(tiles)?;
 
-        let cross_direction = -game_move.direction;
-
-        let pm = game_move.move_position_map.as_mut().unwrap();
-        let positions_length = pm.positions.len();
+        let cross_direction = -direction;
 
         // apply tiles to the position map
         let mut word = String::new();
-        let mut word_score: u8 = 0;
-        let mut connecting_word_scores = 0u8;
+        let mut main_word_score: u16 = 0;
+        let mut connecting_word_scores = 0u16;
+        let mut word_multiplier = 1u8;
         let mut tile_idx = 0;
-        for position_map_idx in 0..positions_length {
-            let p = &pm.positions[position_map_idx];
-            let pt = &mut pm.position_types[position_map_idx];
-            match pt {
-                MovePositionType::Open { tile: cell_tile } => {
+        let number_of_tiles = tiles.0.len();
+
+        // move iterators goes back to the start of contiguous filled cells
+        for (current_pos, move_cell) in self.board.move_iterator(starting_position, direction) {
+            match move_cell {
+                MoveCell::Open | MoveCell::Connecting { .. } => {
+                    // if we are out of tiles then finish
+                    if tile_idx >= number_of_tiles {
+                        break;
+                    }
                     let tile = tiles.0[tile_idx];
                     tile_idx += 1;
                     let letter = tile.letter().unwrap();
                     word.push(letter.as_char());
-                    *cell_tile = Some(tile);
-                    let cell = self.board.get_cell_pos(*p);
+                    let cell = self.board.get_cell_pos(current_pos);
                     let letter_multiplier = cell.cell_type.letter_multiplier();
-                    word_score +=
-                        self.scrabble_variant.letter_values[letter.as_usize()] * letter_multiplier;
-                    //word_multiplier *= cell.cell_type.word_multiplier();
-                }
-                MovePositionType::Connecting {
-                    tile: cell_tile,
-                    letter_set,
-                    start_pos,
-                    end_pos,
-                    connecting_word,
-                } => {
-                    let tile = tiles.0[tile_idx];
-                    tile_idx += 1;
-                    let letter = tile.letter().unwrap();
-                    if !letter_set.contains(letter) {
-                        return Err(MoveError::LetterNotAllowedInPosition);
-                    }
-                    word.push(letter.as_char());
-                    *cell_tile = Some(tile);
-                    let cell = self.board.get_cell_pos(*p);
-                    let letter_multiplier = cell.cell_type.letter_multiplier();
-                    word_score +=
-                        self.scrabble_variant.letter_values[letter.as_usize()] * letter_multiplier;
+                    main_word_score +=
+                        (tile.score(self.scrabble_variant) * letter_multiplier) as u16;
+                    word_multiplier *= cell.cell_type.word_multiplier();
 
-                    let mut cross_score = 0;
-                    let mut cross_start_pos = *p;
-                    let mut previous_letters: Vec<Letter> = vec![];
-                    while let Some(cross_previous_pos) =
-                        cross_start_pos.try_step_backward(&cross_direction)
-                    {
-                        if let Some(&letter) =
-                            self.board.get_cell_pos(cross_previous_pos).as_filled()
-                        {
-                            previous_letters.push(letter);
-                            cross_start_pos = cross_previous_pos;
-                            cross_score += self.scrabble_variant.letter_values[letter.as_usize()];
-                        } else {
-                            break;
+                    if let MoveCell::Connecting { letter_set } = move_cell {
+                        if !letter_set.contains(letter) {
+                            return Err(MoveError::LetterNotAllowedInPosition);
                         }
+                        connecting_word_scores += self.board.score_cross_word(
+                            current_pos,
+                            cross_direction,
+                            tile,
+                            letter,
+                        )?;
                     }
-
-                    let mut cross_word = String::new();
-                    for letter in previous_letters.iter().rev() {
-                        cross_word.push(letter.as_char());
-                    }
-                    cross_word.push(letter.as_char());
-                    cross_score +=
-                        self.scrabble_variant.letter_values[letter.as_usize()] * letter_multiplier;
-
-                    let mut cross_end_pos = *p;
-                    while let Some(cross_next_pos) =
-                        cross_end_pos.try_step_forward(&cross_direction)
-                    {
-                        if let Some(&letter) = self.board.get_cell_pos(cross_next_pos).as_filled() {
-                            cross_word.push(letter.as_char());
-                            cross_end_pos = cross_next_pos;
-                            cross_score += self.scrabble_variant.letter_values[letter.as_usize()];
-                        } else {
-                            break;
-                        }
-                    }
-
-                    *start_pos = Some(cross_start_pos);
-                    *end_pos = Some(cross_end_pos);
-                    *connecting_word = Some(cross_word);
-                    connecting_word_scores += cross_score * cell.cell_type.word_multiplier();
                 }
-                MovePositionType::Filled { letter } => {
+
+                MoveCell::Filled { letter, score } => {
                     word.push(letter.clone().as_char());
+                    main_word_score += score;
                 }
             }
         }
@@ -410,209 +323,306 @@ impl Game {
         if !is_word(&word) {
             return Err(MoveError::InvalidWord(word));
         }
-        game_move.score = word_score as u16 * pm.word_multiplier as u16
-            + connecting_word_scores as u16
-            + if game_move.length == 7 {
+        let score = main_word_score * word_multiplier as u16
+            + connecting_word_scores
+            + if tile_idx == 7 {
                 self.scrabble_variant.bingo_bonus as u16
             } else {
                 0
             };
-        game_move.word = Some(word);
-        Ok(())
+        Ok(score)
     }
 
-    pub fn apply_move(&mut self, game_move: &GameMove) -> Result<u16, MoveError> {
-        let word = game_move.word.as_ref().unwrap();
-        let score = game_move.score;
-        let direction = game_move.direction;
+    // returns true if the game is over
+    pub fn apply_move(
+        &mut self,
+        starting_position: Position,
+        direction: Direction,
+        tile_list: &TileList,
+        score: u16,
+    ) -> Result<bool, MoveError> {
+        let player_rack = &mut self.players[self.current_player].rack;
         let cross_direction = -direction;
-        let pm = game_move.move_position_map.as_ref().unwrap();
-        let positions_length = pm.positions.len();
-        let previous_cell_pos = pm.previous_cell_pos.unwrap();
-        let next_cell_pos = pm.next_cell_pos.unwrap();
 
-        let player_rack = &mut self.players[self.next_player].rack;
+        let mut tile_vec = tile_list.0.clone();
+        tile_vec.reverse();
 
-        let mut previous_letter_set = LetterSet::new_empty();
-        for letter in tiles::ALPHABET.iter() {
-            if is_word(&format!("{}{}", letter.as_char(), word)) {
-                previous_letter_set.add(*letter);
-            }
-        }
-        self.board
-            .get_cell_pos_mut(previous_cell_pos)
-            .value
-            .set_letter_set(cross_direction, previous_letter_set);
+        let mut current_pos = starting_position;
+        loop {
+            let cell = self.board.get_cell_pos_mut(current_pos);
+            match cell.value {
+                CellValue::Empty { .. } => {
+                    if let Some(played_tile) = tile_vec.pop() {
+                        cell.set_tile(played_tile);
+                        player_rack.remove_tile(played_tile);
 
-        let mut next_letter_set = LetterSet::new_empty();
-        for letter in ALPHABET.iter() {
-            if is_word(&format!("{}{}", word, letter.as_char())) {
-                next_letter_set.add(*letter);
-            }
-        }
-        self.board
-            .get_cell_pos_mut(next_cell_pos)
-            .value
-            .set_letter_set(cross_direction, next_letter_set);
-
-        for idx in 0..game_move.length {
-            let p = pm.positions[idx as usize];
-            let pt = &pm.position_types[idx as usize];
-            let cell = self.board.get_cell_pos_mut(p);
-            match pt {
-                MovePositionType::Open {
-                    tile: Some(played_tile),
-                } => {
-                    cell.set_tile(*played_tile);
-                    player_rack.remove_tile(*played_tile);
-
-                    self.board.update_word_gaps(
-                        WordPositions {
-                            start_pos: p,
-                            end_pos: p,
-                        },
-                        cross_direction,
-                    );
-                }
-                MovePositionType::Connecting {
-                    tile: Some(played_tile),
-                    letter_set,
-                    start_pos,
-                    end_pos,
-                    connecting_word,
-                } => {
-                    cell.set_tile(*played_tile);
-                    player_rack.remove_tile(*played_tile);
-
-                    self.board.update_word_gaps(
-                        WordPositions {
-                            start_pos: start_pos.unwrap(),
-                            end_pos: end_pos.unwrap(),
-                        },
-                        cross_direction,
-                    );
+                        self.board.update_word_gaps(current_pos, cross_direction);
+                    } else {
+                        break;
+                    }
                 }
                 _ => {}
             }
+            if let Some(pos) = current_pos.try_step_forward(direction) {
+                current_pos = pos;
+            } else {
+                break;
+            }
         }
+
+        self.board.update_word_gaps(starting_position, direction);
 
         player_rack.fill_rack(&mut self.bag);
-        self.scores[self.next_player] += score as u32;
+        self.scores[self.current_player] += score as u16;
 
         if player_rack.is_empty() {
-            self.is_over = true;
+            self.end_game();
+        } else {
+            self.reset_current_player_stats();
+            self.current_player = (self.current_player + 1) % self.players.len();
+            self.first_move = false;
         }
-        self.next_player = (self.next_player + 1) % self.players.len();
-        self.first_move = false;
 
-        Ok(score)
+        Ok(self.is_over)
     }
 
-    pub fn human_move(&mut self, tiles: &str) -> Result<u16, MoveError> {
+    fn exchange_tiles(&mut self, tiles: &TileList) -> Result<(), MoveError> {
+        if self.bag.count() < 7 {
+            return Err(MoveError::NotEnoughTilesInBag);
+        }
+
+        let player_rack = &mut self.players[self.current_player].rack;
+        player_rack.confirm_contains_tile_list(tiles)?;
+        player_rack.remove_tile_list(tiles);
+        self.bag.add_tile_list(tiles);
+        player_rack.fill_rack(&mut self.bag);
+        self.players[self.current_player].exchanges += 1;
+        self.non_scoring_plays += 1;
+
+        if self.non_scoring_plays >= 6 {
+            self.end_game();
+        } else {
+            self.current_player = (self.current_player + 1) % self.players.len();
+        }
+        Ok(())
+    }
+
+    fn pass(&mut self) -> Result<(), MoveError> {
+        self.players[self.current_player].passes += 1;
+        self.non_scoring_plays += 1;
+        if self.non_scoring_plays >= 6 {
+            self.end_game();
+        } else {
+            self.current_player = (self.current_player + 1) % self.players.len();
+        }
+        Ok(())
+    }
+
+    pub fn reset_current_player_stats(&mut self) {
+        for player in self.players.iter_mut() {
+            player.exchanges = 0;
+            player.passes = 0;
+        }
+    }
+
+    pub fn human_move(&mut self, tiles: &str, move_type: MoveType) -> Result<u16, MoveError> {
         let tiles = tiles.trim().to_ascii_uppercase();
         let tiles = tiles.as_str().into();
-        self.players[self.next_player]
+        self.players[self.current_player]
             .rack
             .confirm_contains_tile_list(&tiles)?;
 
-        let length = tiles.len() as u8;
-        let mut game_move = GameMove {
-            starting_position: Position::new(7, 7),
-            player: 0,
-            first_move: true,
-            direction: Direction::Horizontal,
-            length,
-            move_position_map: None,
-            word: None,
-            score: 0,
-        };
+        match move_type {
+            MoveType::Exchange => {
+                self.exchange_tiles(&tiles)?;
+                Ok(0)
+            }
+            MoveType::Pass => {
+                self.pass()?;
+                Ok(0)
+            }
+            MoveType::Play => {
+                let (min_tiles, max_tiles) =
+                    self.validate_position(Position { x: 7, y: 7 }, Direction::Horizontal)?;
 
-        //let mut game_move = game_move.clone();
-        self.validate_position(&mut game_move)?;
-
-        self.validate_move(&mut game_move, &tiles)?;
-        let score = self.apply_move(&game_move)?;
-        Ok(score)
+                if tiles.len() < min_tiles as usize || tiles.len() > max_tiles as usize {
+                    return Err(MoveError::TilesDonNotFit);
+                }
+                let score =
+                    self.validate_move(Position { x: 7, y: 7 }, Direction::Horizontal, &tiles)?;
+                let game_over = self.apply_move(
+                    Position { x: 7, y: 7 },
+                    Direction::Horizontal,
+                    &tiles,
+                    score,
+                )?;
+                self.last_player_to_play = Some(self.current_player);
+                self.reset_current_player_stats();
+                Ok(score)
+            }
+        }
     }
 
     // recursive function to find the best move for a given position
     fn computer_move_position(
         &mut self,
         best_move: &mut GameMove, // the best move found so far, the contents will be updated if a better move is found
-        pos_ref_move: &GameMove,  // contains the starting position and min/max tiles
+        starting_position: Position,
+        direction: Direction,
+        min_tiles: u8,
+        max_tiles: u8,
         current_tile_list: TileList,
         current_rack: TileBag,
     ) {
-        let mut position_map = best_move.move_position_map.as_ref().unwrap();
-        let min_tiles = position_map.min_tiles;
-        let max_tiles = position_map.max_tiles;
-
-        if (current_tile_list.0.len() as u8) >= min_tiles {
+        if current_tile_list.len() as u8 >= max_tiles {
+            return;
+        }
+        if (current_tile_list.len() as u8) >= min_tiles {
             //let try_move = &mut best_move.clone();
-            let try_move = &mut GameMove {
-                starting_position: best_move.starting_position,
-                player: best_move.player,
-                first_move: best_move.first_move,
-                direction: best_move.direction,
-                length: current_tile_list.0.len() as u8,
-                move_position_map: None,
-                word: None,
-                score: 0,
-            };
-            if self.validate_position(try_move).is_ok() {
-                if self.validate_move(try_move, &current_tile_list).is_ok() {
-                    if try_move.score > best_move.score {
-                        *best_move = try_move.clone();
-                    }
+            if let Ok(score) = self.validate_move(starting_position, direction, &current_tile_list)
+            {
+                if score > best_move.score {
+                    *best_move = GameMove::new(
+                        starting_position,
+                        direction,
+                        current_tile_list.clone(),
+                        score,
+                    );
                 }
             }
         }
 
-        if (current_tile_list.0.len() as u8) < max_tiles && !current_rack.is_empty() {
+        if (current_tile_list.len() as u8) < max_tiles && !current_rack.is_empty() {
             let has_blanks = current_rack.blanks > 0;
-            for letter in ALPHABET {
-                if current_rack.count_letter(*letter) > 0 {
+            for &letter in ALPHABET {
+                if current_rack.contains(letter) {
                     let mut new_tile_list = current_tile_list.clone();
-                    let tile = Tile::Letter(*letter);
+                    let tile = Tile::Letter(letter);
                     new_tile_list.0.push(tile);
                     let mut new_rack = current_rack.clone();
-                    new_rack.remove_letter(*letter);
-                    self.computer_move_position(best_move, new_tile_list, new_rack);
+                    new_rack.remove_letter(letter);
+                    self.computer_move_position(
+                        best_move,
+                        starting_position,
+                        direction,
+                        min_tiles,
+                        max_tiles,
+                        new_tile_list,
+                        new_rack,
+                    );
                 }
-                if has_blanks {
+                if current_rack.blanks > 0 {
                     let mut new_tile_list = current_tile_list.clone();
                     let tile = Tile::Blank {
-                        acting_as_letter: Some(*letter),
+                        acting_as_letter: Some(letter),
                     };
                     new_tile_list.0.push(tile);
                     let mut new_rack = current_rack.clone();
                     new_rack.remove_blank();
-                    self.computer_move_position(best_move, new_tile_list, new_rack);
+                    self.computer_move_position(
+                        best_move,
+                        starting_position,
+                        direction,
+                        min_tiles,
+                        max_tiles,
+                        new_tile_list,
+                        new_rack,
+                    );
                 }
             }
         }
     }
 
     pub fn computer_move(&mut self) -> Result<u16, MoveError> {
-        let player = &self.players[self.next_player];
-
-        let direction = Direction::Horizontal;
         let start_pos = Position::new(7, 7);
+        let direction = Direction::Horizontal;
+        let best_move = &mut GameMove::new(start_pos, direction, TileList::new(), 0);
 
-        let best_move =
-            &mut GameMove::new(self.next_player, direction, self.first_move, start_pos, 7);
-        self.validate_position(best_move)?;
+        for &direction in [Direction::Vertical, Direction::Horizontal].iter() {
+            for y in 0..15 {
+                for x in 0..15 {
+                    let start_pos = Position::new(x, y);
+                    if let Ok((min_tiles, max_tiles)) = self.validate_position(start_pos, direction)
+                    {
+                        self.computer_move_position(
+                            best_move,
+                            start_pos,
+                            direction,
+                            min_tiles,
+                            max_tiles,
+                            TileList::new(),
+                            self.players[self.current_player].rack.clone(),
+                        );
+                    }
+                }
+            }
+        }
 
-        self.computer_move_position(
-            best_move,
-            Vec::new().into(),
-            self.players[self.next_player].rack.clone(),
-        );
+        if best_move.score == 0 {
+            self.computer_no_move()?;
+        } else {
+            let game_over = self.apply_move(
+                best_move.starting_position,
+                best_move.direction,
+                &best_move.tiles,
+                best_move.score,
+            )?;
+        }
 
-        let score = self.apply_move(best_move)?;
-
-        Ok(score)
+        Ok(best_move.score)
     }
+
+    fn computer_no_move(&mut self) -> Result<(), MoveError> {
+        // if best move has score 0, then we haven't found a move, so we either pass or exchange tiles
+        // if we were the last player to play, we pass
+        // we can assume that someone can play, it is not possible that no-one can get a playable rack given we can exchange tiles
+
+        if self.bag.count() >= 7 {
+            let tiles = self.players[self.current_player].rack.into();
+            self.exchange_tiles(&tiles)?;
+            return Ok(());
+        } else {
+            self.pass()?;
+            return Ok(());
+        }
+    }
+
+    fn end_game(&mut self) {
+        self.is_over = true;
+        // if the current player has no tiles left, they get the sum of all the tiles in the other players racks
+        // otherwise, each player has the sum of their rack deducted from their score
+        let mut racks_total = 0;
+        for player in self.players.iter() {
+            racks_total += player.rack.sum_tile_values(self.scrabble_variant);
+        }
+        let current_player = &self.players[self.current_player];
+        if current_player.rack.is_empty() {
+            self.scores[self.current_player] += racks_total;
+        }
+        for (i, player) in self.players.iter().enumerate() {
+            if i != self.current_player {
+                self.scores[i] -= player.rack.sum_tile_values(self.scrabble_variant);
+            }
+        }
+
+        let mut max_score = 0;
+        let mut winner = 0;
+        for (i, player) in self.players.iter().enumerate() {
+            let player_score = self.scores[i];
+            if player_score > max_score {
+                max_score = player_score;
+                winner = i;
+            }
+        }
+        self.is_over = true;
+        self.winner = Some(winner);
+    }
+}
+
+pub enum MoveType {
+    Play,
+    Pass,
+    Exchange,
 }
 
 //test game

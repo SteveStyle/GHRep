@@ -154,20 +154,20 @@ impl LetterSet {
         self.values & (1 << index) != 0
     }
 
-    pub fn add(&mut self, index: Letter) {
-        self.set_bit(index.0);
+    pub fn add(&mut self, letter: Letter) {
+        self.set_bit(letter.0);
     }
 
     pub fn add_all(&mut self) {
         self.values = ALL_LETTERS_VALUE;
     }
 
-    pub fn remove(&mut self, index: Letter) {
-        self.unset_bit(index.0);
+    pub fn remove(&mut self, letter: Letter) {
+        self.unset_bit(letter.0);
     }
 
-    pub fn contains(&self, index: Letter) -> bool {
-        self.bit(index.0)
+    pub fn contains(&self, letter: Letter) -> bool {
+        self.bit(letter.0)
     }
 
     pub fn remove_all(&mut self) {
@@ -180,6 +180,15 @@ impl LetterSet {
 
     pub fn is_full(&self) -> bool {
         self.values == ALL_LETTERS_VALUE
+    }
+
+    pub fn allows_rack(&self, rack: &TileBag) -> bool {
+        for letter in self.into_iter() {
+            if rack.contains(letter) {
+                return true;
+            }
+        }
+        false
     }
 }
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -245,6 +254,13 @@ impl Tile {
             } => Err(crate::MoveError::BlankTileNotActingAsLetter),
         }
     }
+
+    pub fn score(&self, scrabble_variant: &ScrabbleVariant) -> u8 {
+        match self {
+            Tile::Letter(letter) => scrabble_variant.letter_values[letter.as_usize()],
+            Tile::Blank { .. } => 0,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -291,7 +307,10 @@ impl TileBag {
     pub(crate) fn remove_blank(&mut self) {
         self.blanks -= 1;
     }
-    fn count(&self) -> u8 {
+    pub fn contains(&self, letter: Letter) -> bool {
+        self.letters[letter.as_usize()] > 0
+    }
+    pub(crate) fn count(&self) -> u8 {
         self.letters.iter().sum::<u8>() + self.blanks
     }
     fn count_tile(&self, tile: Tile) -> u8 {
@@ -301,6 +320,13 @@ impl TileBag {
                 acting_as_letter: _,
             } => self.blanks,
         }
+    }
+    pub(crate) fn sum_tile_values(&self, scrabble_variant: &ScrabbleVariant) -> u16 {
+        let mut sum = 0;
+        for (letter, letter_count) in self.letters.iter().enumerate() {
+            sum += letter_count * scrabble_variant.letter_values[letter];
+        }
+        sum as u16
     }
     pub(crate) fn count_letter(&self, letter: Letter) -> u8 {
         self.letters[letter.as_usize()]
@@ -377,6 +403,18 @@ impl TileBag {
             let tile = bag.random_tile();
             self.add_tile(tile);
             bag.remove_tile(tile);
+        }
+    }
+
+    pub(crate) fn remove_tile_list(&mut self, other: &TileList) {
+        for tile in other.0.iter() {
+            self.remove_tile(*tile);
+        }
+    }
+
+    pub(crate) fn add_tile_list(&mut self, other: &TileList) {
+        for tile in other.0.iter() {
+            self.add_tile(*tile);
         }
     }
     pub fn to_vec(&self) -> Vec<char> {
@@ -468,6 +506,12 @@ impl From<TileBag> for TileList {
             });
         }
         TileList(vec)
+    }
+}
+
+impl TileList {
+    pub fn new() -> Self {
+        TileList(Vec::new())
     }
 }
 

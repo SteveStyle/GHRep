@@ -68,7 +68,7 @@ impl Position {
         result
     }
 
-    pub fn try_step_forward(&self, direction: &Direction) -> Option<Position> {
+    pub fn try_step_forward(&self, direction: Direction) -> Option<Position> {
         match direction {
             Direction::Horizontal => {
                 if self.x < 14 {
@@ -87,7 +87,7 @@ impl Position {
         }
     }
 
-    pub fn try_step_backward(&self, direction: &Direction) -> Option<Position> {
+    pub fn try_step_backward(&self, direction: Direction) -> Option<Position> {
         match direction {
             Direction::Horizontal => {
                 if self.x > 0 {
