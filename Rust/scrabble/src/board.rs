@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -211,7 +212,7 @@ impl CellType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Cell {
     pub(crate) value: CellValue,
     pub(crate) cell_type: CellType,
@@ -227,7 +228,10 @@ impl Display for Cell {
                 f,
                 "{}{} {} {}",
                 BOLDON,
-                TILECOLOUR,
+                match self.cell_type {
+                    CellType::DoubleWord | CellType::TripleWord => RED,
+                    _ => TILECOLOUR,
+                },
                 self.cell_type.as_char(),
                 BOLDOFF
             ),
@@ -238,6 +242,28 @@ impl Display for Cell {
                         "{}{}{}{}{} {}",
                         BOLDON, BLANKCOLOUR, "*", LETTERCOLOUR, letter, BOLDOFF
                     )
+                } else {
+                    write!(f, "{} {}{} {}", BOLDOFF, LETTERCOLOUR, letter, BOLDOFF)
+                }
+            }
+        }
+    }
+}
+
+impl Debug for Cell {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.value {
+            CellValue::Empty {
+                horizontal_letters,
+                vertical_letters,
+            } => write!(
+                f,
+                "Horizontal Letters {}   Vertical Letters  {}",
+                horizontal_letters, vertical_letters
+            ),
+            CellValue::Filled { letter, is_blank } => {
+                if is_blank {
+                    write!(f, "{}{}", "*", letter)
                 } else {
                     write!(f, "{} {}{} {}", BOLDOFF, LETTERCOLOUR, letter, BOLDOFF)
                 }
@@ -371,7 +397,7 @@ pub struct ScrabbleVariant {
     pub height: u8,
 }
 
-pub(crate) const SCRABBLE_VARIANT_OFFICIAL: ScrabbleVariant = ScrabbleVariant {
+pub const SCRABBLE_VARIANT_OFFICIAL: ScrabbleVariant = ScrabbleVariant {
     letter_values: [
         /*
         A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q , R, S, T, U, V, W, X, Y, Z, */
@@ -459,9 +485,10 @@ const VERTICAL_BORDER: char = '\u{2502}';
 const HORIZONTAL_BORDER: char = '─';
 // line border is a string consisting of 2*BOARD_SIZE + 1 horizontal borders
 const HORIZONTAL_LINE: char = '\u{2501}';
-const TOP_BORDER: &str = "\u{250c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{2510}\n";
-const MIDDLE_BORDER: &str = "\u{251c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{2524}\n";
-const BOTTOM_BORDER: &str = "\u{2514}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2518}\n";
+const HEADINGS: &str = "    A   B   C   D   E   F   G   H   I   J   K   L   M   N   O\n";
+const TOP_BORDER: &str = "  \u{250c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{2510}\n";
+const MIDDLE_BORDER: &str = "  \u{251c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{2524}\n";
+const BOTTOM_BORDER: &str = "  \u{2514}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2518}\n";
 
 // TO DO: use unicode box drawing characters
 // https://en.wikipedia.org/wiki/Box-drawing_character
@@ -476,11 +503,14 @@ impl fmt::Display for Board {
         write!(f, "{}", GRIDCOLOUR);
         for y in 0..15 {
             if first_line {
+                s.push_str(&HEADINGS);
                 s.push_str(&TOP_BORDER);
                 first_line = false;
             } else {
                 s.push_str(&MIDDLE_BORDER);
             }
+            s.push_str(format!("{:2}", y + 1).as_str());
+
             for x in 0..15 {
                 s.push(VERTICAL_BORDER);
                 s.push_str(&format!("{}{}", self.get_cell(x, y), GRIDCOLOUR));
@@ -509,6 +539,9 @@ impl Board {
     }
     pub(crate) fn get_cell_pos_mut<'a>(&'a mut self, pos: Position) -> &'a mut Cell {
         &mut self.cells[(pos.y * 15 + pos.x) as usize]
+    }
+    pub fn is_valid_position(&self, pos: Position) -> bool {
+        pos.x < self.scrabble_variant.width && pos.y < self.scrabble_variant.height
     }
     pub(crate) fn new(variant: &'static ScrabbleVariant) -> Board {
         let mut board = Board {
@@ -559,12 +592,16 @@ impl Board {
     pub fn read_word_at_pos(&self, reference_position: Position, direction: Direction) -> String {
         let mut pos_iterator = self.start_of_word(reference_position, direction);
         let mut word = String::new();
-        while let Some(next_position) = pos_iterator.try_step_forward(direction) {
-            match self.get_cell_pos(next_position).value {
+        loop {
+            match self.get_cell_pos(pos_iterator).value {
                 CellValue::Empty { .. } => break,
                 CellValue::Filled { letter, .. } => word.push(letter.as_char()),
             }
-            pos_iterator = next_position;
+            if let Some(next_position) = pos_iterator.try_step_forward(direction) {
+                pos_iterator = next_position;
+            } else {
+                break;
+            }
         }
         word
     }

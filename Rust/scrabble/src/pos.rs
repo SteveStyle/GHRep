@@ -1,7 +1,7 @@
 //extern crate num_traits;
 
 //use num_traits::Num;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::ops::AddAssign;
 use std::str::FromStr;
 
@@ -14,6 +14,44 @@ pub struct Position {
     pub x: PosIndex,
     pub y: PosIndex,
 }
+
+impl Display for Position {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", (self.x as u8 + 'A' as u8) as char, self.y + 1)
+    }
+}
+
+impl FromStr for Position {
+    // expecting the format A10
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut chars = s.chars();
+        if s.len() < 2 {
+            return Err(format!("Invalid position: {}", s));
+        }
+
+        let column = chars.next().unwrap();
+        match column {
+            'A'..='O' => (),
+            _ => return Err(format!("Invalid position: {}", s)),
+        }
+        let column = column as u8 - 'A' as u8;
+
+        let mut row = chars.next().unwrap().to_string();
+        if let Some(z) = chars.next() {
+            row.push(z);
+        }
+        match row.parse::<u8>() {
+            Ok(r) => Ok(Position {
+                x: column,
+                y: r - 1,
+            }),
+
+            Err(_) => Err(format!("Invalid position: {}", s)),
+        }
+    }
+}
+
 // implement add and subtract for position
 impl std::ops::Add<Position> for Position {
     type Output = Position;

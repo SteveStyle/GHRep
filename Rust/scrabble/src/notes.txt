@@ -1,0 +1,26 @@
+modes:
+    human vs computer
+    computer, step through
+    suggestions
+    word lookup
+
+make t and d red
+show coordinates
+offer link to last word
+
+
+store top n moves, not just best
+
+highlight last moves
+
+use termcolor crate
+
+profiler
+    how much time is looking up words?
+    can we improve time by using a local cache?
+
+
+strategy
+    rate rack
+    check for opportunities left on the board
+    genetic algorythm?

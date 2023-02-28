@@ -65,7 +65,7 @@ pub fn is_word(word: &str) -> bool {
 }
 
 pub fn generate_anagrams(tiles: &TileBag) -> HashSet<String> {
-    let timer = Timer::new("generate_anagrams()");
+    let timer = Timer::new(true);
     let mut anagrams = HashSet::new();
     let mut tiles = tiles.to_vec();
     tiles.sort();
@@ -90,7 +90,7 @@ mod test {
     use super::Timer;
     #[test]
     fn test_is_word() {
-        let timer = Timer::new("show_totals()");
+        let timer = Timer::new(true);
         let result =
             super::is_word("AAS") && super::is_word("AARDVARK") && !super::is_word("AARDVARKS");
         let elapsed = timer.elapsed();
@@ -100,7 +100,7 @@ mod test {
     }
     #[test]
     fn test_is_word2() {
-        let timer = Timer::new("show_totals()");
+        let timer = Timer::new(true);
         let mut letters = [0; 26];
         letters[0] = 2;
         letters[1] = 1;
@@ -112,7 +112,7 @@ mod test {
         println!("hs: {:?}", hs);
         let result = hs.contains("CEDE");
         println!("result: {}", result);
-        let timer = Timer::new("test");
+        let timer = Timer::new(true);
         let result = hs.contains("BADE") && hs.contains("ABED") && hs.contains("BEAD");
         let elapsed = timer.elapsed();
         println!("Time taken: {} seconds", elapsed.as_secs_f64());

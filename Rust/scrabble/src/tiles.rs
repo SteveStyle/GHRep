@@ -437,6 +437,16 @@ impl TileList {
     }
 }
 
+impl Display for TileList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut s = String::new();
+        for tile in self.0.iter() {
+            s.push_str(&tile.to_string());
+        }
+        write!(f, "{}", s)
+    }
+}
+
 impl From<Vec<Tile>> for TileList {
     fn from(vec: Vec<Tile>) -> Self {
         TileList(vec)

@@ -21,18 +21,49 @@ where
     return result;
 }
 
-pub struct Timer<'a> {
-    name: &'a str,
+#[derive(Debug, Clone, Copy)]
+pub struct Timer {
     start: Instant,
+    duration: Duration,
+    running: bool,
 }
 
-impl<'a> Timer<'a> {
-    pub fn new(name: &'a str) -> Timer<'a> {
+impl Timer {
+    pub fn new(running: bool) -> Timer {
         let start = Instant::now();
-        Timer { name, start }
+        Timer {
+            start,
+            duration: Duration::new(0, 0),
+            running,
+        }
+    }
+
+    pub fn start(&mut self) {
+        if !self.running {
+            self.start = Instant::now();
+            self.running = true;
+        }
+    }
+
+    pub fn stop(&mut self) -> Duration {
+        if self.running == true {
+            self.duration += Instant::now().duration_since(self.start);
+            self.running = false;
+        }
+        self.duration
+    }
+
+    pub fn reset(&mut self, running: bool) {
+        self.start = Instant::now();
+        self.duration = Duration::new(0, 0);
+        self.running = running;
     }
 
     pub fn elapsed(&self) -> Duration {
-        Instant::now().duration_since(self.start)
+        if self.running {
+            self.duration + Instant::now().duration_since(self.start)
+        } else {
+            self.duration
+        }
     }
 }
