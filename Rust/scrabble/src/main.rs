@@ -7,6 +7,7 @@ use scrabble::board::SCRABBLE_VARIANT_WORDFEUD;
 use scrabble::*;
 
 use chrono::Local;
+use scrabble::board::ScrabbleVariant;
 use scrabble::pos::Position;
 use scrabble::tiles::{Letter, TileList};
 use scrabble::word_list::is_word;
@@ -32,7 +33,7 @@ fn menu_top() {
         println!("1) Computer vs Computer");
         println!("2) Human vs Computer");
         println!("3) Human vs Human");
-        println!("4) Look up word");
+        println!("9) Look up word");
         println!("0) Exit");
 
         // read a char from stdin and compare to  1 to 4
@@ -42,16 +43,169 @@ fn menu_top() {
             "1" => computer_vs_computer(),
             "2" => human_vs_computer(),
             "3" => human_vs_human(),
-            "4" => look_up_word(),
+
+            "9" => look_up_word(),
             "0" => break,
             _ => println!("Invalid input"),
         }
     }
 }
 
+enum UserInputError {
+    UserCancelled,
+}
+
+fn ad_hoc_game() -> Result<(), UserInputError> {
+    let scrabble_variant = get_user_input_scrabble_variant()?;
+    let no_players = get_user_input_integer("Enter number of players", "2", 2, 4)? as usize;
+    let players = [Player::new(PlayerType::Human); 4];
+    let player_name: Vec<String> = vec![];
+
+    for i in 0..no_players {
+        let player_type = get_user_input_player_type()?;
+        let name = get_user_input_string(
+            &format!("Enter name for player {}", i + 1),
+            &format!("Player {}", i + 1),
+        )?;
+
+        players[i as usize] = Player::new(player_type);
+        player_name.push(name);
+    }
+
+    let mut game = Game::new(&scrabble_variant, no_players, players, player_name);
+
+    game.start();
+    while !game.is_game_over() {
+        match game.current_player().game_type {
+            PlayerType::Human => {
+                human_move(&mut game)?;
+            }
+            PlayerType::Computer => {
+                computer_move(&mut game)?;
+            }
+        }
+        println!("{}", game);
+    }
+
+    // print the final score
+
+    Ok(())
+}
+
+fn get_user_input_string(caption: &str, default: &str) -> Result<String, UserInputError> {
+    println!("{}\n(0 to cancel, return for {})", caption, default);
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let input = input.trim().to_uppercase();
+    match &input {
+        "0" => Err(UserInputError::UserCancelled),
+        "" => Ok(default.to_string()),
+        _ => Ok(input),
+    }
+}
+
+fn get_user_input_position(caption: &str, default: &str) -> Result<Position, UserInputError> {
+    loop {
+        let input = get_user_input_string(caption, default)?;
+        match Position::from_str(&input) {
+            Ok(p) => return Ok(p),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_letter(caption: &str, default: &str) -> Result<Letter, UserInputError> {
+    loop {
+        let input = get_user_input_string(caption, default)?;
+        match Letter::from_str(&input) {
+            Ok(l) => return Ok(l),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_tile_list(caption: &str, default: &str) -> Result<TileList, UserInputError> {
+    loop {
+        let input = get_user_input_string(caption, default)?;
+        match TileList::from_str(&input) {
+            Ok(t) => return Ok(t),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_integer(
+    caption: &str,
+    default: &str,
+    min: i32,
+    max: i32,
+) -> Result<i32, UserInputError> {
+    loop {
+        let input = get_user_input_string(caption, default)?;
+        match input.parse::<i32>() {
+            Ok(i) => {
+                if i >= min && i <= max {
+                    return Ok(i);
+                } else {
+                    println!("Please enter a number between {} and {}", min, max);
+                }
+            }
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_direction(caption: &str, default: &str) -> Result<Direction, UserInputError> {
+    loop {
+        let input = get_user_input_string(caption, default)?;
+        match Direction::from_str(&input) {
+            Ok(d) => return Ok(d),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_bool(caption: &str, default: &str) -> Result<bool, UserInputError> {
+    loop {
+        let input = get_user_input_string(caption, default)?;
+        match input.as_str() {
+            "Y" => return Ok(true),
+            "N" => return Ok(false),
+            _ => println!("Please enter 'Y' or 'N'"),
+        }
+    }
+}
+
+fn get_user_input_scrabble_variant() -> Result<ScrabbleVariant, UserInputError> {
+    loop {
+        let input = get_user_input_string(
+            "Which scrabble ruleset should we use?\n1) Official\n2)Wordfeud",
+            "1",
+        )?;
+        match input.as_str() {
+            "1" => return Ok(SCRABBLE_VARIANT_OFFICIAL),
+            "2" => return Ok(SCRABBLE_VARIANT_WORDFEUD),
+            _ => println!("Please enter '1' or '2'"),
+        }
+    }
+}
+
+fn get_user_input_player_type() -> Result<PlayerType, UserInputError> {
+    loop {
+        let input = get_user_input_string(
+            "Which player type should we use?\n1) Human\n2) Computer",
+            "1",
+        )?;
+        match input.as_str() {
+            "1" => return Ok(PlayerType::Human),
+            "2" => return Ok(PlayerType::Computer),
+            _ => println!("Please enter '1' or '2'"),
+        }
+    }
+}
+
 fn computer_vs_computer() {
     let mut game = Game::new(&SCRABBLE_VARIANT_OFFICIAL);
-    let timer = Timer::new(true);
     let mut pause: bool = false;
 
     let mut result1 = game.computer_move();
@@ -73,11 +227,7 @@ fn computer_vs_computer() {
         result1 = game.computer_move();
     }
 
-    let elapsed = timer.elapsed();
-
     println!("{}", game);
-
-    println!("Time taken: {} seconds", elapsed.as_secs_f64());
 }
 
 fn human_vs_computer() {
@@ -123,6 +273,9 @@ fn human_vs_computer() {
 }
 
 fn human_move(game: &mut Game) {
+    if game.is_over {
+        return;
+    }
     let mut debug_info = String::new();
     loop {
         println!("{}", game);

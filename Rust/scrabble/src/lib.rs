@@ -31,12 +31,25 @@ pub enum PlayerType {
 pub struct Player {
     pub player_type: PlayerType,
     pub rack: tiles::TileBag,
-    pub name: String,
     pub score: u16,
     pub passes: u8,
     pub exchanges: u8,
     pub timer: Timer,
     pub last_move: usize,
+}
+
+impl Player {
+    pub fn new(player_type: PlayerType) -> Self {
+        Self {
+            player_type,
+            rack: TileBag::new_empty(),
+            score: 0,
+            passes: 0,
+            exchanges: 0,
+            timer: Timer::new(false),
+            last_move: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -178,7 +191,9 @@ pub struct Game {
     //  fixed part of the game
     scrabble_variant: &'static board::ScrabbleVariant,
     //  mutable part of the game
-    pub players: [Player; 2],
+    pub number_of_players: usize,
+    pub player: [Player; 4],
+    pub player_name: Vec<String>,
     pub board: board::Board,
     pub bag: tiles::TileBag,
     pub current_player: usize, // index into `players`
@@ -195,20 +210,21 @@ pub struct Game {
 impl Display for Game {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "\x1B[2J\x1B[1;1H")?;
-        for player in &self.players {
+        for i in 0..self.number_of_players {
             writeln!(
                 f,
                 "{}: score {:4}  time {}   {}",
-                player.name,
-                player.score,
-                player.timer.elapsed().as_secs_f64(),
-                if let Some(last_move) = self.moves.get(player.last_move) {
+                self.player_name[i],
+                self.player[i].score,
+                self.player[i].timer.elapsed().as_secs_f64(),
+                if let Some(last_move) = self.moves.get(self.player[i].last_move) {
                     format!("last move {}", last_move)
                 } else {
                     "".to_string()
                 },
             )?;
         }
+
         writeln!(f, "{}", self.board)?;
         writeln!(
             f,
@@ -239,40 +255,23 @@ pub enum MoveError {
 }
 
 impl Game {
-    pub fn new(scrabble_variant: &'static board::ScrabbleVariant) -> Self {
+    pub fn new(
+        scrabble_variant: &'static board::ScrabbleVariant,
+        number_of_players: usize,
+        players: [Player; 4],
+        player_name: Vec<String>,
+    ) -> Self {
         let mut bag = tiles::TileBag::new(scrabble_variant);
 
-        let mut players = [
-            Player {
-                player_type: PlayerType::Human,
-                rack: TileBag::new_empty(),
-                name: "Player 1".to_string(),
-                score: 0,
-                passes: 0,
-                exchanges: 0,
-                timer: Timer::new(true),
-                last_move: 0,
-            },
-            Player {
-                player_type: PlayerType::Computer,
-                rack: TileBag::new_empty(),
-                name: "Player 2".to_string(),
-                score: 0,
-                passes: 0,
-                exchanges: 0,
-                timer: Timer::new(false),
-                last_move: 0,
-            },
-        ];
-        players[0].rack.fill_rack(&mut bag);
-        players[1].rack.fill_rack(&mut bag);
         let board = board::Board::new(scrabble_variant);
         let next_player = 0;
         let moves = Vec::new();
         //let local_word_list = word_list::generate_anagrams(&players[1].rack);
-        Self {
+        let mut game = Self {
             scrabble_variant,
-            players,
+            number_of_players: number_of_players,
+            player: players,
+            player_name,
             board,
             bag,
             current_player: next_player,
@@ -283,15 +282,20 @@ impl Game {
             non_scoring_plays: 0,
             moves,
             //  local_word_list,
+        };
+
+        for i in 0..number_of_players {
+            game.player[i].rack.fill_rack(&mut game.bag);
         }
+        game
     }
 
     pub fn current_player(&self) -> &Player {
-        &(self.players[self.current_player])
+        &(self.player[self.current_player])
     }
 
     pub fn current_player_mut(&mut self) -> &mut Player {
-        &mut (self.players[self.current_player])
+        &mut (self.player[self.current_player])
     }
 
     // returns the positions of each tile and the positions of filled cells
@@ -316,7 +320,7 @@ impl Game {
                     tiles_placed += 1;
                 }
                 MoveCell::Connecting { letter_set } => {
-                    if letter_set.allows_rack(&self.players[self.current_player].rack) {
+                    if letter_set.allows_rack(&self.player[self.current_player].rack) {
                         // we can place a tile here
                         tiles_placed += 1;
                         if min_tiles == 0 {
@@ -355,7 +359,7 @@ impl Game {
     ) -> Result<u16, MoveError> {
         // returns the score of the move
         // check that the tiles are in the rack
-        self.players[self.current_player]
+        self.player[self.current_player]
             .rack
             .confirm_contains_tile_list(tiles)?;
 
@@ -428,7 +432,7 @@ impl Game {
         tile_list: &TileList,
         score: u16,
     ) -> Result<bool, MoveError> {
-        let player = &mut self.players[self.current_player];
+        let player = &mut self.player[self.current_player];
         //let player = self.current_player();
         let cross_direction = -direction;
 
@@ -462,7 +466,7 @@ impl Game {
 
         self.moves.push(GameMoveRecord {
             player: self.current_player,
-            player_name: player.name.clone(),
+            player_name: self.player_name[self.current_player].clone(),
             detail: GameMoveRecordDetail::Move {
                 starting_position,
                 direction,
@@ -483,8 +487,8 @@ impl Game {
             self.end_game();
         } else {
             self.reset_current_player_stats();
-            self.current_player = (self.current_player + 1) % self.players.len();
-            self.players[self.current_player].timer.start();
+            self.current_player = (self.current_player + 1) % self.player.len();
+            self.player[self.current_player].timer.start();
             self.first_move = false;
         }
 
@@ -496,17 +500,17 @@ impl Game {
             return Err(MoveError::NotEnoughTilesInBag);
         }
 
-        let player_rack = &mut self.players[self.current_player].rack;
+        let player_rack = &mut self.player[self.current_player].rack;
         player_rack.confirm_contains_tile_list(tiles)?;
         player_rack.remove_tile_list(tiles);
         self.bag.add_tile_list(tiles);
         player_rack.fill_rack(&mut self.bag);
-        self.players[self.current_player].exchanges += 1;
+        self.player[self.current_player].exchanges += 1;
         self.non_scoring_plays += 1;
 
         self.moves.push(GameMoveRecord {
             player: self.current_player,
-            player_name: self.players[self.current_player].name.clone(),
+            player_name: self.player[self.current_player].name.clone(),
             detail: GameMoveRecordDetail::Exchange {
                 no_tiles: tiles.0.len() as u8,
             },
@@ -514,13 +518,13 @@ impl Game {
 
         self.current_player_mut().last_move = self.moves.len() - 1;
 
-        self.players[self.current_player].timer.stop();
+        self.player[self.current_player].timer.stop();
 
         if self.non_scoring_plays >= 6 {
             self.end_game();
         } else {
-            self.current_player = (self.current_player + 1) % self.players.len();
-            self.players[self.current_player].timer.start();
+            self.current_player = (self.current_player + 1) % self.player.len();
+            self.player[self.current_player].timer.start();
         }
 
         Ok(())
@@ -529,21 +533,21 @@ impl Game {
     pub fn pass(&mut self) -> Result<(), MoveError> {
         self.moves.push(GameMoveRecord {
             player: self.current_player,
-            player_name: self.players[self.current_player].name.clone(),
+            player_name: self.player[self.current_player].name.clone(),
             detail: GameMoveRecordDetail::Pass,
         });
 
         self.current_player_mut().last_move = self.moves.len() - 1;
 
-        self.players[self.current_player].timer.stop();
+        self.player[self.current_player].timer.stop();
 
-        self.players[self.current_player].passes += 1;
+        self.player[self.current_player].passes += 1;
         self.non_scoring_plays += 1;
         if self.non_scoring_plays >= 6 {
             self.end_game();
         } else {
-            self.current_player = (self.current_player + 1) % self.players.len();
-            self.players[self.current_player].timer.start();
+            self.current_player = (self.current_player + 1) % self.player.len();
+            self.player[self.current_player].timer.start();
         }
         Ok(())
     }
@@ -553,7 +557,7 @@ impl Game {
     }
 
     pub fn reset_current_player_stats(&mut self) {
-        for player in self.players.iter_mut() {
+        for player in self.player.iter_mut() {
             player.exchanges = 0;
             player.passes = 0;
         }
@@ -671,7 +675,7 @@ impl Game {
                             min_tiles,
                             max_tiles,
                             TileList::new(),
-                            self.players[self.current_player].rack.clone(),
+                            self.player[self.current_player].rack.clone(),
                         );
                     }
                 }
@@ -698,7 +702,7 @@ impl Game {
         // we can assume that someone can play, it is not possible that no-one can get a playable rack given we can exchange tiles
 
         if self.bag.count() >= 7 {
-            let tiles = self.players[self.current_player].rack.into();
+            let tiles = self.player[self.current_player].rack.into();
             self.exchange_tiles(&tiles)?;
             return Ok(());
         } else {
@@ -712,14 +716,14 @@ impl Game {
         // if the current player has no tiles left, they get the sum of all the tiles in the other players racks
         // otherwise, each player has the sum of their rack deducted from their score
         let mut racks_total = 0;
-        for player in self.players.iter() {
+        for player in self.player.iter() {
             racks_total += player.rack.sum_tile_values(self.scrabble_variant);
         }
-        let current_player = &self.players[self.current_player];
+        let current_player = &self.player[self.current_player];
         if current_player.rack.is_empty() {
             self.current_player_mut().score += racks_total;
         }
-        for (i, player) in self.players.iter_mut().enumerate() {
+        for (i, player) in self.player.iter_mut().enumerate() {
             if i != self.current_player {
                 player.score -= player.rack.sum_tile_values(self.scrabble_variant);
             }
@@ -727,7 +731,7 @@ impl Game {
 
         let mut max_score = 0;
         let mut winner = 0;
-        for (i, player) in self.players.iter().enumerate() {
+        for (i, player) in self.player.iter().enumerate() {
             if player.score > max_score {
                 max_score = player.score;
                 winner = i;
@@ -739,16 +743,5 @@ impl Game {
 
     pub fn last_move(&self) -> Option<&GameMoveRecord> {
         self.moves.last()
-    }
-}
-
-//test game
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_game() {
-        let game = Game::new(&board::SCRABBLE_VARIANT_WORDFEUD);
-        println! {"{}", game};
     }
 }

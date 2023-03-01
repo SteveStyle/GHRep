@@ -4,9 +4,19 @@ modes:
     suggestions
     word lookup
 
-make t and d red
-show coordinates
+
+allow more than two players
+allow player names (default to player 1, player 2, etc)
+drive human/computer by game set up
+allow suggestion/ play for me option
+
+allow cancel out of any menu, to reach the previous menu
+
+
+show coordinates - all sides
 offer link to last word
+
+
 
 
 store top n moves, not just best
