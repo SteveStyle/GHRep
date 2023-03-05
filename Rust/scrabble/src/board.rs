@@ -26,6 +26,7 @@ pub(crate) enum CellValue {
     Filled {
         letter: Letter,
         is_blank: bool,
+        populated_last_move: bool,
     },
 }
 
@@ -40,14 +41,18 @@ impl Display for CellValue {
                 "Empty {{ horizontal_letters: {}, vertical_letters: {} }}",
                 horizontal_letters, vertical_letters
             ),
-            Self::Filled { letter, is_blank } => write!(f, "Filled {{ letter: {} }}", letter),
+            Self::Filled {
+                letter,
+                is_blank,
+                populated_last_move,
+            } => write!(f, "Filled {{ letter: {} }}", letter),
         }
     }
 }
 
 impl CellValue {
     pub(crate) fn as_filled(&self) -> Option<Letter> {
-        if let Self::Filled { letter, is_blank } = *self {
+        if let Self::Filled { letter, .. } = *self {
             Some(letter)
         } else {
             None
@@ -97,7 +102,7 @@ impl CellValue {
                 Direction::Horizontal => *horizontal_letters,
                 Direction::Vertical => *vertical_letters,
             },
-            Self::Filled { letter, is_blank } => LetterSet::from(*letter),
+            Self::Filled { letter, .. } => LetterSet::from(*letter),
         }
     }
 
@@ -110,7 +115,7 @@ impl CellValue {
     }
 
     pub(crate) fn try_into_filled(self) -> Result<Letter, Self> {
-        if let Self::Filled { letter, is_blank } = self {
+        if let Self::Filled { letter, .. } = self {
             Ok(letter)
         } else {
             Err(self)
@@ -235,16 +240,21 @@ impl Display for Cell {
                 self.cell_type.as_char(),
                 BOLDOFF
             ),
-            CellValue::Filled { letter, is_blank } => {
-                if is_blank {
-                    write!(
-                        f,
-                        "{}{}{}{}{} {}",
-                        BOLDON, BLANKCOLOUR, "*", LETTERCOLOUR, letter, BOLDOFF
-                    )
-                } else {
-                    write!(f, "{} {}{} {}", BOLDOFF, LETTERCOLOUR, letter, BOLDOFF)
-                }
+            CellValue::Filled {
+                letter,
+                is_blank,
+                populated_last_move,
+            } => {
+                write!(
+                    f,
+                    "{}{}{}{}{} {}",
+                    if populated_last_move { BOLDON } else { "" },
+                    if is_blank { BLANKCOLOUR } else { LETTERCOLOUR },
+                    if is_blank { "*" } else { " " },
+                    LETTERCOLOUR,
+                    letter,
+                    BOLDOFF
+                )
             }
         }
     }
@@ -261,7 +271,9 @@ impl Debug for Cell {
                 "Horizontal Letters {}   Vertical Letters  {}",
                 horizontal_letters, vertical_letters
             ),
-            CellValue::Filled { letter, is_blank } => {
+            CellValue::Filled {
+                letter, is_blank, ..
+            } => {
                 if is_blank {
                     write!(f, "{}{}", "*", letter)
                 } else {
@@ -307,6 +319,7 @@ impl Cell {
         self.value = CellValue::Filled {
             letter,
             is_blank: false,
+            populated_last_move: false,
         };
     }
 
@@ -314,6 +327,7 @@ impl Cell {
         self.value = CellValue::Filled {
             letter: tile.letter().unwrap(),
             is_blank: tile.is_blank(),
+            populated_last_move: true,
         };
     }
 
@@ -516,9 +530,11 @@ impl fmt::Display for Board {
                 s.push_str(&format!("{}{}", self.get_cell(x, y), GRIDCOLOUR));
             }
             s.push(VERTICAL_BORDER);
+            s.push_str(format!("{:2}", y + 1).as_str());
             s.push('\n');
         }
         s.push_str(&BOTTOM_BORDER);
+        s.push_str(&HEADINGS);
         write!(f, "{}{}", s, RESET)
     }
 }
@@ -679,7 +695,9 @@ impl Board {
         let mut previous_letters: Vec<Letter> = vec![];
         while let Some(cross_pos_next) = cross_pos.try_step_backward(direction) {
             match self.get_cell_pos(cross_pos_next).value {
-                CellValue::Filled { letter, is_blank } => {
+                CellValue::Filled {
+                    letter, is_blank, ..
+                } => {
                     previous_letters.push(letter);
                     cross_score += if is_blank {
                         0
@@ -706,7 +724,9 @@ impl Board {
         cross_pos = central_position;
         while let Some(cross_pos_next) = cross_pos.try_step_forward(direction) {
             match self.get_cell_pos(cross_pos_next).value {
-                CellValue::Filled { letter, is_blank } => {
+                CellValue::Filled {
+                    letter, is_blank, ..
+                } => {
                     cross_word.push(letter.as_char());
                     cross_score += if is_blank {
                         0
@@ -761,6 +781,19 @@ impl Board {
             self.start_of_word(starting_position, direction),
             direction,
         )
+    }
+    pub fn reset_last_move_flags(&mut self) {
+        for cell in self.cells.iter_mut() {
+            match cell.value {
+                CellValue::Filled {
+                    ref mut populated_last_move,
+                    ..
+                } => {
+                    *populated_last_move = false;
+                }
+                _ => {}
+            }
+        }
     }
 }
 
@@ -827,7 +860,9 @@ impl Iterator for MoveIterator<'_> {
                     }
                 }
             }
-            CellValue::Filled { letter, is_blank } => {
+            CellValue::Filled {
+                letter, is_blank, ..
+            } => {
                 let score = if is_blank {
                     0
                 } else {

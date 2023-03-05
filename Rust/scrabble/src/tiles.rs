@@ -469,8 +469,10 @@ impl From<TileList> for TileBag {
     }
 }
 
-impl From<&str> for TileList {
-    fn from(s: &str) -> Self {
+impl TryFrom<&str> for TileList {
+    type Error = crate::MoveError;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
         let mut vec = Vec::new();
         let mut index = 0;
         let s = s.trim().to_uppercase();
@@ -484,21 +486,19 @@ impl From<&str> for TileList {
                         });
                         index += 1;
                     } else {
-                        vec.push(Tile::Blank {
-                            acting_as_letter: None,
-                        });
+                        return Err(crate::MoveError::InvalidTile(c));
                     }
                 } else {
-                    vec.push(Tile::Blank {
-                        acting_as_letter: None,
-                    });
+                    return Err(crate::MoveError::InvalidTile(c));
                 }
             } else if c.is_ascii_uppercase() {
                 vec.push(Tile::Letter(c.into()));
+            } else {
+                return Err(crate::MoveError::InvalidTile(c));
             }
             index += 1;
         }
-        TileList(vec)
+        Ok(TileList(vec))
     }
 }
 

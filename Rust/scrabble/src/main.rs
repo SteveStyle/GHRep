@@ -2,6 +2,7 @@ use std::cell;
 use std::io;
 use std::str::FromStr;
 
+use itertools::Itertools;
 use scrabble::board::SCRABBLE_VARIANT_OFFICIAL;
 use scrabble::board::SCRABBLE_VARIANT_WORDFEUD;
 use scrabble::*;
@@ -26,13 +27,18 @@ fn main() {
     menu_top();
 }
 
-fn menu_top() {
+fn menu_top() -> Result<(), UserCancelError> {
+    let mut game: Option<Game> = None;
     loop {
         // clear the screen
         print!("\x1B[2J\x1B[1;1H");
         println!("1) Computer vs Computer");
         println!("2) Human vs Computer");
         println!("3) Human vs Human");
+        println!("4) Ad hoc game");
+        if game.is_some() {
+            println!("5) Restart game");
+        }
         println!("9) Look up word");
         println!("0) Exit");
 
@@ -40,397 +46,276 @@ fn menu_top() {
         let mut input = String::new();
         io::stdin().read_line(&mut input).unwrap();
         match input.trim() {
-            "1" => computer_vs_computer(),
-            "2" => human_vs_computer(),
-            "3" => human_vs_human(),
+            "1" => {
+                if let Ok(g) = computer_vs_computer() {
+                    game = Some(g);
+                }
+            }
+            "2" => {
+                if let Ok(g) = human_vs_computer() {
+                    game = Some(g);
+                }
+            }
+            "3" => {
+                if let Ok(g) = human_vs_human() {
+                    game = Some(g);
+                }
+            }
+            "4" => {
+                if let Ok(g) = ad_hoc_game() {
+                    game = Some(g);
+                }
+            }
+            "5" => {
+                if let Some(g) = game.as_ref() {
+                    if let Ok(g2) = restart_game(g) {
+                        game = Some(g2);
+                    }
+                }
+            }
 
             "9" => look_up_word(),
             "0" => break,
-            _ => println!("Invalid input"),
+            _ => {
+                println!("Invalid input");
+            }
         }
     }
+    Ok(())
 }
 
-enum UserInputError {
+#[derive(Debug, PartialEq)]
+enum UserCancelError {
     UserCancelled,
 }
 
-fn ad_hoc_game() -> Result<(), UserInputError> {
-    let scrabble_variant = get_user_input_scrabble_variant()?;
-    let no_players = get_user_input_integer("Enter number of players", "2", 2, 4)? as usize;
-    let players = [Player::new(PlayerType::Human); 4];
-    let player_name: Vec<String> = vec![];
+fn play_game(game: &mut Game) -> Result<(), UserCancelError> {
+    while !game.is_over {
+        println!("{}", game);
+        match game.current_player().player_type {
+            PlayerType::Human => {
+                human_move(game)?;
+            }
+            PlayerType::Computer => {
+                game.computer_move();
+            }
+        }
+    }
 
-    for i in 0..no_players {
+    println!("{}", game);
+    println!("GAME OVER!!!\n\n\n");
+    if let Some(winner) = game.winner {
+        println!("{} has won!\n\n", game.player_name[winner]);
+    } else {
+        println!("It's a draw!\n\n");
+    }
+
+    println!("The scores are:");
+    (0..game.number_of_players)
+        .map(|i| (game.player[i].score, game.player_name[i].clone()))
+        .sorted()
+        .rev()
+        .for_each(|(score, name)| println!("{} scored {}", name, score));
+
+    get_user_input_string_uppercase("Press enter to continue...", "", false)?;
+
+    Ok(())
+}
+
+fn ad_hoc_game() -> Result<Game, UserCancelError> {
+    let scrabble_variant = get_user_input_scrabble_variant()?;
+    let number_of_players =
+        get_user_input_integer("Enter number of players", "2", 2, 4, true)? as usize;
+    let mut players = [Player::new(PlayerType::Human); 4];
+    let mut player_name: Vec<String> = vec![];
+
+    for i in 0..number_of_players {
         let player_type = get_user_input_player_type()?;
-        let name = get_user_input_string(
-            &format!("Enter name for player {}", i + 1),
-            &format!("Player {}", i + 1),
-        )?;
+        let name = get_user_player_name(i)?;
 
         players[i as usize] = Player::new(player_type);
         player_name.push(name);
     }
 
-    let mut game = Game::new(&scrabble_variant, no_players, players, player_name);
+    let mut game = Game::new(&scrabble_variant, number_of_players, players, player_name);
+    play_game(&mut game)?;
+    Ok(game)
+}
 
-    game.start();
-    while !game.is_game_over() {
-        match game.current_player().game_type {
-            PlayerType::Human => {
-                human_move(&mut game)?;
-            }
-            PlayerType::Computer => {
-                computer_move(&mut game)?;
-            }
-        }
-        println!("{}", game);
+fn computer_vs_computer() -> Result<Game, UserCancelError> {
+    let scrabble_variant = get_user_input_scrabble_variant()?;
+    let number_of_players = 2;
+    let mut players = [Player::new(PlayerType::Human); 4];
+    let mut player_name: Vec<String> = vec![];
+
+    for i in 0..number_of_players {
+        let player_type = PlayerType::Computer;
+        let name = format!("Player {}", i + 1);
+
+        players[i as usize] = Player::new(player_type);
+        player_name.push(name);
     }
 
-    // print the final score
+    let mut game = Game::new(&scrabble_variant, number_of_players, players, player_name);
+
+    play_game(&mut game)?;
+    Ok(game)
+}
+
+fn human_vs_computer() -> Result<Game, UserCancelError> {
+    let scrabble_variant = get_user_input_scrabble_variant()?;
+    let human_name = get_user_input_string("What is your name?", "Human", true)?;
+    let human_first = get_user_input_bool(
+        &format!("Do you want to go first {}?", &human_name),
+        "Y",
+        true,
+    )?;
+    let number_of_players = 2;
+    let human_player = Player::new(PlayerType::Human);
+    let computer_player = Player::new(PlayerType::Computer);
+    let player_name = if human_first {
+        vec![human_name, "Computer".to_string()]
+    } else {
+        vec!["Computer".to_string(), human_name]
+    };
+
+    let players = if human_first {
+        [
+            human_player,
+            computer_player,
+            computer_player,
+            computer_player,
+        ]
+    } else {
+        [
+            computer_player,
+            human_player,
+            computer_player,
+            computer_player,
+        ]
+    };
+
+    let mut game = Game::new(&scrabble_variant, number_of_players, players, player_name);
+
+    play_game(&mut game)?;
+    Ok(game)
+}
+
+fn human_move(game: &mut Game) -> Result<(), UserCancelError> {
+    if game.is_over {
+        return Ok(());
+    }
+    let mut debug_info = String::new();
+
+    println!("{}", game);
+    println!("{}", debug_info);
+    println!("What would you like to do?");
+    println!("1) Play a word");
+    println!("2) Pass");
+    println!("3) Exchange tiles");
+    println!("4) Show cell info");
+    println!("5) Computer suggestion");
+    println!("9) Resign Game");
+    println!("0) Quit Program");
+
+    // read a char from stdin and compare to  1 to 4
+    let menu_choice = get_user_input_string("Enter choice: ", "0", true).unwrap_or("0".to_string());
+    match menu_choice.trim() {
+        "1" => {
+            play_word(game);
+        }
+        "2" => {
+            game.pass();
+        }
+        "3" => {
+            if let Ok(tile_list) = get_user_input_tile_list("Enter tiles to exchange") {
+                if let Err(e) = game.exchange_tiles(&tile_list) {
+                    println!("Error: {:?}", e);
+                }
+            }
+        }
+
+        "4" => {
+            //take a list of cells and show the info for each
+            if let Ok(position) = get_user_input_position("Enter cell", "") {
+                let cell = game.board.get_cell_pos(position);
+                debug_info.push_str(format!("Cell {} {:?}", position.to_string(), cell).as_str());
+                debug_info.push('\n');
+            }
+        }
+        "5" => {
+            computer_suggestion(game);
+        }
+        "0" => {
+            if get_user_input_bool(
+                "Are you sure you want to quit the program? (Y or N)",
+                "N",
+                true,
+            )
+            .unwrap_or(false)
+            {
+                panic!("User quit");
+            }
+        }
+        "9" => {
+            if get_user_input_bool(
+                "Are you sure you want to resign the game? (Y or N)",
+                "N",
+                true,
+            )
+            .unwrap_or(false)
+            {
+                game.quit();
+            }
+        }
+        _ => println!("Invalid input"),
+    }
 
     Ok(())
 }
 
-fn get_user_input_string(caption: &str, default: &str) -> Result<String, UserInputError> {
-    println!("{}\n(0 to cancel, return for {})", caption, default);
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    let input = input.trim().to_uppercase();
-    match &input {
-        "0" => Err(UserInputError::UserCancelled),
-        "" => Ok(default.to_string()),
-        _ => Ok(input),
-    }
-}
-
-fn get_user_input_position(caption: &str, default: &str) -> Result<Position, UserInputError> {
-    loop {
-        let input = get_user_input_string(caption, default)?;
-        match Position::from_str(&input) {
-            Ok(p) => return Ok(p),
-            Err(e) => println!("{}", e),
+fn computer_suggestion(game: &mut Game) -> Result<(), UserCancelError> {
+    let mut game_copy = game.clone();
+    game_copy.computer_move();
+    println!("{}", game_copy);
+    let last_move = game_copy.last_move().unwrap().clone();
+    match last_move.detail.clone() {
+        GameMoveRecordDetail::Move {
+            starting_position,
+            direction,
+            tiles,
+            score,
+            word,
+        } => {
+            println!(
+                "Suggested move: you could play {} for {} points.",
+                word, score
+            );
         }
-    }
-}
-
-fn get_user_input_letter(caption: &str, default: &str) -> Result<Letter, UserInputError> {
-    loop {
-        let input = get_user_input_string(caption, default)?;
-        match Letter::from_str(&input) {
-            Ok(l) => return Ok(l),
-            Err(e) => println!("{}", e),
+        GameMoveRecordDetail::Exchange { no_tiles, tiles } => {
+            println!("Suggestion: you could exchange these tiles, {}", tiles);
         }
-    }
-}
-
-fn get_user_input_tile_list(caption: &str, default: &str) -> Result<TileList, UserInputError> {
-    loop {
-        let input = get_user_input_string(caption, default)?;
-        match TileList::from_str(&input) {
-            Ok(t) => return Ok(t),
-            Err(e) => println!("{}", e),
-        }
-    }
-}
-
-fn get_user_input_integer(
-    caption: &str,
-    default: &str,
-    min: i32,
-    max: i32,
-) -> Result<i32, UserInputError> {
-    loop {
-        let input = get_user_input_string(caption, default)?;
-        match input.parse::<i32>() {
-            Ok(i) => {
-                if i >= min && i <= max {
-                    return Ok(i);
-                } else {
-                    println!("Please enter a number between {} and {}", min, max);
-                }
-            }
-            Err(e) => println!("{}", e),
-        }
-    }
-}
-
-fn get_user_input_direction(caption: &str, default: &str) -> Result<Direction, UserInputError> {
-    loop {
-        let input = get_user_input_string(caption, default)?;
-        match Direction::from_str(&input) {
-            Ok(d) => return Ok(d),
-            Err(e) => println!("{}", e),
-        }
-    }
-}
-
-fn get_user_input_bool(caption: &str, default: &str) -> Result<bool, UserInputError> {
-    loop {
-        let input = get_user_input_string(caption, default)?;
-        match input.as_str() {
-            "Y" => return Ok(true),
-            "N" => return Ok(false),
-            _ => println!("Please enter 'Y' or 'N'"),
-        }
-    }
-}
-
-fn get_user_input_scrabble_variant() -> Result<ScrabbleVariant, UserInputError> {
-    loop {
-        let input = get_user_input_string(
-            "Which scrabble ruleset should we use?\n1) Official\n2)Wordfeud",
-            "1",
-        )?;
-        match input.as_str() {
-            "1" => return Ok(SCRABBLE_VARIANT_OFFICIAL),
-            "2" => return Ok(SCRABBLE_VARIANT_WORDFEUD),
-            _ => println!("Please enter '1' or '2'"),
-        }
-    }
-}
-
-fn get_user_input_player_type() -> Result<PlayerType, UserInputError> {
-    loop {
-        let input = get_user_input_string(
-            "Which player type should we use?\n1) Human\n2) Computer",
-            "1",
-        )?;
-        match input.as_str() {
-            "1" => return Ok(PlayerType::Human),
-            "2" => return Ok(PlayerType::Computer),
-            _ => println!("Please enter '1' or '2'"),
-        }
-    }
-}
-
-fn computer_vs_computer() {
-    let mut game = Game::new(&SCRABBLE_VARIANT_OFFICIAL);
-    let mut pause: bool = false;
-
-    let mut result1 = game.computer_move();
-    // return for the next move, 'a' to play all moves without stopping
-    while !game.is_over {
-        if pause {
-            println!("Enter 'a' to play all moves without stopping, or any other key to continue");
-            let mut input = String::new();
-            io::stdin().read_line(&mut input).unwrap();
-            match input.trim().to_uppercase().as_str() {
-                "A" => {
-                    pause = false;
-                    break;
-                }
-                _ => {}
-            }
-        }
-        println!("{}", game);
-        result1 = game.computer_move();
-    }
-
-    println!("{}", game);
-}
-
-fn human_vs_computer() {
-    let mut game = Game::new(&SCRABBLE_VARIANT_OFFICIAL);
-    let mut timer_human = Timer::new(false);
-    let mut timer_computer = Timer::new(false);
-
-    let human_first: bool;
-    loop {
-        // ask who should move first?  the human or the computer?
-        println!("Who should move first?  Enter 'h' for human or 'c' for computer");
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-
-        match input.trim().to_uppercase().as_str() {
-            "H" => {
-                human_first = true;
-                break;
-            }
-            "C" => {
-                human_first = false;
-                break;
-            }
-            _ => println!(
-                "You entered {}.  I didn't understand that.  Please enter 'h' or 'c'\n",
-                input.trim()
-            ),
+        GameMoveRecordDetail::Pass => {
+            println!("Suggestion: you could pass...");
         }
     }
 
-    if !human_first {
-        game.computer_move();
+    if get_user_input_bool("Use this move?", "Y", true)? {
+        *game = game_copy;
     }
-    while !game.is_over {
-        human_move(&mut game);
-        game.computer_move();
-    }
-
-    println!("{}", game);
-
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
+    Ok(())
 }
 
-fn human_move(game: &mut Game) {
-    if game.is_over {
-        return;
-    }
-    let mut debug_info = String::new();
-    loop {
-        println!("{}", game);
-        println!("{}", debug_info);
-        println!("What would you like to do?");
-        println!("1) Play a word");
-        println!("2) Pass");
-        println!("3) Exchange tiles");
-        println!("4) Show cell info");
-        println!("0) Quit");
-
-        // read a char from stdin and compare to  1 to 4
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-        match input.trim() {
-            "1" => {
-                play_word(game);
-                break;
-            }
-            "2" => {
-                game.pass();
-                break;
-            }
-            "3" => {
-                println!("Enter tiles to exchange: ");
-                io::stdin().read_line(&mut input).unwrap();
-
-                println!("You entered: {}", input);
-
-                match game.exchange_tiles(&input.as_str().into()) {
-                    Ok(_) => {
-                        println!("{}", game);
-                        break;
-                    }
-                    Err(e) => println!("Exchange rejected: {:?}", e),
-                }
-            }
-            "4" => {
-                //take a list of cells and show the info for each
-                loop {
-                    println!("Enter cell to show info for: ");
-                    let mut input = String::new();
-                    io::stdin().read_line(&mut input).unwrap();
-                    let input = input.trim().to_uppercase();
-
-                    println!("You entered: {}", input);
-
-                    match Position::from_str(&input) {
-                        Ok(p) => {
-                            if game.board.is_valid_position(p) {
-                                let cell = game.board.get_cell_pos(p);
-                                debug_info.push_str(
-                                    format!("Cell {} ({},{}) {:?}", &input, p.x, p.y, cell)
-                                        .as_str(),
-                                );
-                                debug_info.push('\n');
-                                break;
-                            } else {
-                                println!("Invalid position: {:?}", p);
-                                continue;
-                            }
-                        }
-                        Err(e) => {
-                            println!("Invalid position: {:?}", e);
-                            continue;
-                        }
-                    }
-                }
-            }
-            "0" => {
-                game.quit();
-                break;
-            }
-            _ => println!("Invalid input"),
-        }
-    }
-}
-
-fn play_word(game: &mut Game) {
+fn play_word(game: &mut Game) -> Result<(), UserCancelError> {
     // capture the starting cell
     let mut starting_position: Position;
     let mut direction: Direction;
     let mut tiles: String;
 
     loop {
-        loop {
-            println!("{}", game);
-            let mut input = String::new();
-            println!("Enter starting cell: ");
-            io::stdin().read_line(&mut input).unwrap();
-            let cell_string = input.trim().to_uppercase();
-            if cell_string.len() < 2 {
-                println!(
-                "You entered {}.  I didn't understand that.  Please enter a cell like A1 or O15\n",
-                cell_string
-            );
-                continue;
-            }
-            let column = cell_string.chars().nth(0).unwrap();
-            match column {
-                'A'..='O' => (),
-                _ => {
-                    println!("Invalid cell");
-                    continue;
-                }
-            }
-            let column: Letter = column.into();
-            let column: u8 = column.as_byte();
-            let mut row = String::new();
-            row.push(cell_string.chars().nth(1).unwrap());
-            if cell_string.len() > 2 {
-                row.push(cell_string.chars().nth(2).unwrap());
-            }
-            match row.parse::<u8>() {
-                Ok(r) => starting_position = Position::new(column, r - 1),
-                Err(e) => {
-                    println!("Invalid cell.  You entered {}. Please enter a cell like A1 or H15.\nError message: {}", cell_string, e);
-                    continue;
-                }
-            }
-
-            if !game.board.is_valid_position(starting_position) {
-                println!("Invalid cell");
-                continue;
-            }
-            break;
-        }
-
-        //capture the direction
-        loop {
-            println!("Enter direction (h or v): ");
-            let mut input = String::new();
-            io::stdin().read_line(&mut input).unwrap();
-            let direction_string = input.trim().to_uppercase();
-            match direction_string.as_str() {
-                "H" => {
-                    direction = Direction::Horizontal;
-                    break;
-                }
-                "V" => {
-                    direction = Direction::Vertical;
-                    break;
-                }
-                _ => println!(
-                    "You entered {}.  I didn't understand that.  Please enter 'h' or 'v'\n",
-                    direction_string
-                ),
-            }
-        }
-
-        println!("Enter tiles to play: ");
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-
-        tiles = input.clone().trim().to_uppercase();
+        let starting_position = get_user_input_position("Enter starting position", "H8")?;
+        let direction = get_user_input_direction("Which direction? ('H' or 'V')")?;
+        let tiles = get_user_input_tile_list("Enter tiles to play:  ")?;
 
         match game.human_move(starting_position, direction, &tiles) {
             Ok(_) => {
@@ -439,13 +324,14 @@ fn play_word(game: &mut Game) {
             }
             Err(e) => {
                 println!("Move rejected: {:?}", e);
-                io::stdin().read_line(&mut input).unwrap();
             }
         }
     }
+
+    Ok(())
 }
 
-fn human_vs_human() {
+fn human_vs_human() -> Result<Game, UserCancelError> {
     /*
     let mut game = Game::new(&SCRABBLE_VARIANT_OFFICIAL);
     let timer1 = Timer::new(false);
@@ -483,17 +369,38 @@ fn human_vs_human() {
 
     println!("Time taken: {} seconds", elapsed.as_secs_f64());
     */
+    let mut game = Game::new(
+        &SCRABBLE_VARIANT_OFFICIAL,
+        2,
+        [Player::new(PlayerType::Human); 4],
+        vec![
+            "Player 1".to_string(),
+            "Player 2".to_string(),
+            "Player 3".to_string(),
+            "Player 4".to_string(),
+        ],
+    );
+
+    play_game(&mut game);
+
+    Ok(game)
+}
+
+fn restart_game(game: &Game) -> Result<Game, UserCancelError> {
+    let mut game = game.clone();
+    game.restart();
+
+    play_game(&mut game);
+    Ok(game)
 }
 
 fn look_up_word() {
-    let mut input = String::new();
-    println!("Enter a word: ");
-    io::stdin().read_line(&mut input).unwrap();
-
-    let result = is_word(&input.trim().to_uppercase());
-    match result {
-        true => println!("{input} is a word.  Follow the link for the definition:  https://www.collinsdictionary.com/dictionary/english/{}", input),
-        false => println!("{} is not a word", input),
+    if let Ok(word) = get_user_input_string_uppercase("Enter a word:  ", "0", true) {
+        let result = is_word(&word);
+        match result {
+        true => println!("{word} is a word.  Follow the link for the definition:  https://www.collinsdictionary.com/dictionary/english/{word}"),
+        false => println!("{} is not a word", word),
+    }
     }
 }
 
@@ -504,6 +411,158 @@ fn check_word(word: &str) -> bool {
         false => println!("{} is not a word", word),
     }
     result
+}
+
+fn get_user_input_string(
+    caption: &str,
+    default: &str,
+    show_default: bool,
+) -> Result<String, UserCancelError> {
+    println!(
+        "{}\n(0 to cancel{}{})",
+        caption,
+        if show_default { ", return for " } else { "" },
+        if show_default { default } else { "" },
+    );
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input = input.trim().to_string();
+    if input == "" {
+        input = default.to_string();
+    }
+    match input.as_str() {
+        "0" => Err(UserCancelError::UserCancelled),
+        _ => Ok(input),
+    }
+}
+
+fn get_user_player_name(player_number: usize) -> Result<String, UserCancelError> {
+    let default = format!("Player {}", player_number);
+    get_user_input_string(
+        &format!("Enter name for player {}", player_number),
+        &default,
+        true,
+    )
+}
+
+fn get_user_input_string_uppercase(
+    caption: &str,
+    default: &str,
+    show_default: bool,
+) -> Result<String, UserCancelError> {
+    println!(
+        "{}\n(0 to cancel{}{})",
+        caption,
+        if show_default { ", return for " } else { "" },
+        if show_default { default } else { "" },
+    );
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input = input.trim().to_uppercase();
+    if input == "" {
+        input = default.to_string();
+    }
+    match input.as_str() {
+        "0" => Err(UserCancelError::UserCancelled),
+        _ => Ok(input),
+    }
+}
+
+fn get_user_input_position(caption: &str, default: &str) -> Result<Position, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(caption, default, true)?;
+        match Position::from_str(&input) {
+            Ok(p) => return Ok(p),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_tile_list(caption: &str) -> Result<TileList, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(caption, "0", false)?;
+        match TileList::try_from(input.as_str()) {
+            Ok(t) => return Ok(t),
+            Err(e) => println!("{:?}", e),
+        }
+    }
+}
+
+fn get_user_input_integer(
+    caption: &str,
+    default: &str,
+    min: i32,
+    max: i32,
+    show_default: bool,
+) -> Result<i32, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(caption, default, show_default)?;
+        match input.parse::<i32>() {
+            Ok(i) => {
+                if i >= min && i <= max {
+                    return Ok(i);
+                } else {
+                    println!("Please enter a number between {} and {}", min, max);
+                }
+            }
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_direction(caption: &str) -> Result<Direction, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(caption, "H", true)?;
+        match Direction::try_from(input.as_str()) {
+            Ok(d) => return Ok(d),
+            Err(e) => println!("{}", e),
+        }
+    }
+}
+
+fn get_user_input_bool(
+    caption: &str,
+    default: &str,
+    show_default: bool,
+) -> Result<bool, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(caption, default, show_default)?;
+        match input.as_str() {
+            "Y" => return Ok(true),
+            "N" => return Ok(false),
+            _ => println!("Please enter 'Y' or 'N'"),
+        }
+    }
+}
+
+fn get_user_input_scrabble_variant() -> Result<&'static ScrabbleVariant, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(
+            "Which scrabble ruleset should we use?\n1) Official\n2) Wordfeud",
+            "1",
+            true,
+        )?;
+        match input.as_str() {
+            "1" => return Ok(&SCRABBLE_VARIANT_OFFICIAL),
+            "2" => return Ok(&SCRABBLE_VARIANT_WORDFEUD),
+            _ => println!("Please enter '1' or '2'"),
+        }
+    }
+}
+
+fn get_user_input_player_type() -> Result<PlayerType, UserCancelError> {
+    loop {
+        let input = get_user_input_string_uppercase(
+            "Which player type should we use?\n1) Human\n2) Computer",
+            "1",
+            true,
+        )?;
+        match input.as_str() {
+            "1" => return Ok(PlayerType::Human),
+            "2" => return Ok(PlayerType::Computer),
+            _ => println!("Please enter '1' or '2'"),
+        }
+    }
 }
 
 /*
