@@ -12,6 +12,6 @@ echo "Note, do not enter file extensions."
 exit
 fi
 # Compile, assemble, and link.
-yasm -Worphan-labels -g dwarf2 -f elf64 $1.asm -l $1.lst
-ld -g -o $1 $1.o
+yasm -Worphan-labels -g dwarf2 -f elf64 $1.asm -l bin/$1.lst -o bin/$1.o
+ld -g -o bin/$1 bin/$1.o
 
