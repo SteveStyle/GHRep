@@ -5,7 +5,8 @@ modes:
     word lookup
 
 
-allow negative score
+allow negative score - DONE
+handle resignation properly (don't make the resigner the winner)
 
 correct timer for suggestion, make suggested move a seperate function from application?  In general seperate out computer player from the shared playing board.
 
