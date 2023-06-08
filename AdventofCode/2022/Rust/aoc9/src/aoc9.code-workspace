@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../data"
+		}
+	],
+	"settings": {},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"miDebuggerPath": "vscode-remote://wsl+ubunturust/usr/bin/gdb"
+			}
+		]
+	}
+}
