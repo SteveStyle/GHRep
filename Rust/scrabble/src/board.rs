@@ -13,8 +13,6 @@ use crate::tiles::LetterSet;
 use crate::tiles::Tile;
 use crate::word_list::is_word;
 
-pub(crate) const BOARD_SIZE: u8 = 15;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum CellValue {
     // The possible letters when playing horizontally or vertically, so that this cell can be filled and make a valid word
@@ -41,11 +39,7 @@ impl Display for CellValue {
                 "Empty {{ horizontal_letters: {}, vertical_letters: {} }}",
                 horizontal_letters, vertical_letters
             ),
-            Self::Filled {
-                letter,
-                is_blank,
-                populated_last_move,
-            } => write!(f, "Filled {{ letter: {} }}", letter),
+            Self::Filled { letter, .. } => write!(f, "Filled {{ letter: {} }}", letter),
         }
     }
 }
@@ -62,8 +56,7 @@ impl CellValue {
     pub fn is_vertically_connected(&self) -> bool {
         match self {
             Self::Empty {
-                horizontal_letters,
-                vertical_letters,
+                vertical_letters, ..
             } => !vertical_letters.is_empty(),
             Self::Filled { .. } => true,
         }
@@ -72,53 +65,9 @@ impl CellValue {
     pub fn is_horizontally_connected(&self) -> bool {
         match self {
             Self::Empty {
-                horizontal_letters,
-                vertical_letters,
+                horizontal_letters, ..
             } => !horizontal_letters.is_empty(),
             Self::Filled { .. } => true,
-        }
-    }
-
-    pub fn is_empty_connected(&self) -> bool {
-        match self {
-            Self::Empty {
-                horizontal_letters,
-                vertical_letters,
-            } => !horizontal_letters.is_empty() || !vertical_letters.is_empty(),
-            Self::Filled { .. } => false,
-        }
-    }
-
-    pub fn is_connected(&self) -> bool {
-        self.is_vertically_connected() || self.is_horizontally_connected()
-    }
-
-    pub fn allowed_letters(&self, direction: Direction) -> LetterSet {
-        match self {
-            Self::Empty {
-                horizontal_letters,
-                vertical_letters,
-            } => match direction {
-                Direction::Horizontal => *horizontal_letters,
-                Direction::Vertical => *vertical_letters,
-            },
-            Self::Filled { letter, .. } => LetterSet::from(*letter),
-        }
-    }
-
-    /// Returns `true` if the cell value is [`Filled`].
-    ///
-    /// [`Filled`]: CellValue::Filled
-    #[must_use]
-    pub(crate) fn is_filled(&self) -> bool {
-        matches!(self, Self::Filled { .. })
-    }
-
-    pub(crate) fn try_into_filled(self) -> Result<Letter, Self> {
-        if let Self::Filled { letter, .. } = self {
-            Ok(letter)
-        } else {
-            Err(self)
         }
     }
 
@@ -128,30 +77,6 @@ impl CellValue {
     #[must_use]
     pub(crate) fn is_empty(&self) -> bool {
         matches!(self, Self::Empty { .. })
-    }
-
-    pub(crate) fn try_into_empty(self) -> Result<(LetterSet, LetterSet), Self> {
-        if let Self::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = self
-        {
-            Ok((horizontal_letters, vertical_letters))
-        } else {
-            Err(self)
-        }
-    }
-
-    pub(crate) fn as_empty(&self) -> Option<(&LetterSet, &LetterSet)> {
-        if let Self::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = self
-        {
-            Some((horizontal_letters, vertical_letters))
-        } else {
-            None
-        }
     }
 
     pub(crate) fn set_letter_set(&mut self, direction: Direction, letter_set: LetterSet) {
@@ -226,19 +151,16 @@ pub struct Cell {
 impl Display for Cell {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.value {
-            CellValue::Empty {
-                horizontal_letters,
-                vertical_letters,
-            } => write!(
+            CellValue::Empty { .. } => write!(
                 f,
                 "{}{} {} {}",
-                BOLDON,
+                AnsiCodes::BOLDON,
                 match self.cell_type {
-                    CellType::DoubleWord | CellType::TripleWord => RED,
+                    CellType::DoubleWord | CellType::TripleWord => AnsiCodes::RED,
                     _ => TILECOLOUR,
                 },
                 self.cell_type.as_char(),
-                BOLDOFF
+                AnsiCodes::BOLDOFF
             ),
             CellValue::Filled {
                 letter,
@@ -248,12 +170,16 @@ impl Display for Cell {
                 write!(
                     f,
                     "{}{}{}{}{} {}",
-                    if populated_last_move { BOLDON } else { "" },
+                    if populated_last_move {
+                        AnsiCodes::BOLDON
+                    } else {
+                        ""
+                    },
                     if is_blank { BLANKCOLOUR } else { LETTERCOLOUR },
                     if is_blank { "*" } else { " " },
                     LETTERCOLOUR,
                     letter,
-                    BOLDOFF
+                    AnsiCodes::BOLDOFF
                 )
             }
         }
@@ -277,7 +203,14 @@ impl Debug for Cell {
                 if is_blank {
                     write!(f, "{}{}", "*", letter)
                 } else {
-                    write!(f, "{} {}{} {}", BOLDOFF, LETTERCOLOUR, letter, BOLDOFF)
+                    write!(
+                        f,
+                        "{} {}{} {}",
+                        AnsiCodes::BOLDOFF,
+                        LETTERCOLOUR,
+                        letter,
+                        AnsiCodes::BOLDOFF
+                    )
                 }
             }
         }
@@ -285,42 +218,12 @@ impl Debug for Cell {
 }
 
 impl Cell {
-    pub(crate) fn new(cell_type: CellType) -> Self {
-        Self {
-            value: CellValue::Empty {
-                horizontal_letters: LetterSet::new_full(),
-                vertical_letters: LetterSet::new_full(),
-            },
-            cell_type,
-        }
-    }
-
     pub(crate) fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
 
-    pub(crate) fn is_filled(&self) -> bool {
-        self.value.is_filled()
-    }
-
     pub(crate) fn as_filled(&self) -> Option<Letter> {
         self.value.as_filled()
-    }
-
-    pub(crate) fn as_empty(&self) -> Option<(&LetterSet, &LetterSet)> {
-        self.value.as_empty()
-    }
-
-    pub(crate) fn set_value(&mut self, value: CellValue) {
-        self.value = value;
-    }
-
-    pub(crate) fn set_letter(&mut self, letter: Letter) {
-        self.value = CellValue::Filled {
-            letter,
-            is_blank: false,
-            populated_last_move: false,
-        };
     }
 
     pub(crate) fn set_tile(&mut self, tile: Tile) {
@@ -329,73 +232,6 @@ impl Cell {
             is_blank: tile.is_blank(),
             populated_last_move: true,
         };
-    }
-
-    pub(crate) fn set_empty(&mut self) {
-        self.value = CellValue::Empty {
-            horizontal_letters: LetterSet::new_full(),
-            vertical_letters: LetterSet::new_full(),
-        };
-    }
-
-    pub(crate) fn set_horizontal_letters(&mut self, letters: LetterSet) {
-        if let CellValue::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = &mut self.value
-        {
-            *horizontal_letters = letters;
-        }
-    }
-
-    pub(crate) fn set_vertical_letters(&mut self, letters: LetterSet) {
-        if let CellValue::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = &mut self.value
-        {
-            *vertical_letters = letters;
-        }
-    }
-
-    pub(crate) fn set_horizontal_letter(&mut self, letter: Letter) {
-        if let CellValue::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = &mut self.value
-        {
-            horizontal_letters.add(letter);
-        }
-    }
-
-    pub(crate) fn set_vertical_letter(&mut self, letter: Letter) {
-        if let CellValue::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = &mut self.value
-        {
-            vertical_letters.add(letter);
-        }
-    }
-
-    pub(crate) fn remove_horizontal_letter(&mut self, letter: Letter) {
-        if let CellValue::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = &mut self.value
-        {
-            horizontal_letters.remove(letter);
-        }
-    }
-
-    pub(crate) fn remove_vertical_letter(&mut self, letter: Letter) {
-        if let CellValue::Empty {
-            horizontal_letters,
-            vertical_letters,
-        } = &mut self.value
-        {
-            vertical_letters.remove(letter);
-        }
     }
 }
 
@@ -494,15 +330,14 @@ pub struct Board {
     pub(crate) cells: [Cell; 225],
 }
 
+#[allow(unused_variables)]
 //const VERTICAL_BORDER: char = '|';
 const VERTICAL_BORDER: char = '\u{2502}';
-const HORIZONTAL_BORDER: char = '─';
-// line border is a string consisting of 2*BOARD_SIZE + 1 horizontal borders
-const HORIZONTAL_LINE: char = '\u{2501}';
 const HEADINGS: &str = "    A   B   C   D   E   F   G   H   I   J   K   L   M   N   O\n";
 const TOP_BORDER: &str = "  \u{250c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{252c}───\u{2510}\n";
 const MIDDLE_BORDER: &str = "  \u{251c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{253c}───\u{2524}\n";
 const BOTTOM_BORDER: &str = "  \u{2514}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2534}───\u{2518}\n";
+#[deny(unused_variables)]
 
 // TO DO: use unicode box drawing characters
 // https://en.wikipedia.org/wiki/Box-drawing_character
@@ -513,8 +348,8 @@ impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = String::new();
         let mut first_line = true;
-        write!(f, "{}", BACKGROUND);
-        write!(f, "{}", GRIDCOLOUR);
+        s.push_str(&BACKGROUND);
+        s.push_str(&GRIDCOLOUR);
         for y in 0..15 {
             if first_line {
                 s.push_str(&HEADINGS);
@@ -535,7 +370,7 @@ impl fmt::Display for Board {
         }
         s.push_str(&BOTTOM_BORDER);
         s.push_str(&HEADINGS);
-        write!(f, "{}{}", s, RESET)
+        write!(f, "{}{}", s, AnsiCodes::RESET)
     }
 }
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -630,10 +465,10 @@ impl Board {
     pub fn update_word_gaps(&mut self, reference_position: Position, direction: Direction) {
         // assume central word is surrounded by empty cells or the board edge
         let mut previous_word: String = String::new();
-        let mut central_word = self.read_word_at_pos(reference_position, direction);
+        let central_word = self.read_word_at_pos(reference_position, direction);
         let mut next_word: String = String::new();
 
-        let mut pos = self.start_of_word(reference_position, direction);
+        let pos = self.start_of_word(reference_position, direction);
         if let Some(previous_gap) = pos.try_step_backward(direction) {
             // there is an empty cell, not the board edge
             if let Some(pos) = previous_gap.try_step_backward(direction) {
@@ -656,7 +491,7 @@ impl Board {
                 .set_letter_set(-direction, ls);
         }
 
-        let mut pos = self.end_of_word(pos, direction);
+        let pos = self.end_of_word(pos, direction);
         if let Some(next_gap) = pos.try_step_forward(direction) {
             // there is an empty cell, not the board edge
             if let Some(pos) = next_gap.try_step_forward(direction) {
@@ -686,8 +521,8 @@ impl Board {
         direction: Direction,
         central_tile: Tile,
         central_letter: Letter,
-    ) -> Result<u16, MoveError> {
-        let mut cross_score = 0u16;
+    ) -> Result<i16, MoveError> {
+        let mut cross_score = 0i16;
         let mut cross_pos = central_position;
         let central_cell = self.get_cell_pos(central_position);
 
@@ -702,7 +537,7 @@ impl Board {
                     cross_score += if is_blank {
                         0
                     } else {
-                        self.scrabble_variant.letter_values[letter.as_usize()] as u16
+                        self.scrabble_variant.letter_values[letter.as_usize()] as i16
                     };
                 }
                 CellValue::Empty { .. } => break,
@@ -718,7 +553,7 @@ impl Board {
         // add the letter and score of the central tile
         cross_word.push(central_letter.as_char());
         cross_score += (central_tile.score(self.scrabble_variant)
-            * central_cell.cell_type.letter_multiplier()) as u16;
+            * central_cell.cell_type.letter_multiplier()) as i16;
 
         // get the letters and score of the following tiles
         cross_pos = central_position;
@@ -731,7 +566,7 @@ impl Board {
                     cross_score += if is_blank {
                         0
                     } else {
-                        self.scrabble_variant.letter_values[letter.as_usize()] as u16
+                        self.scrabble_variant.letter_values[letter.as_usize()] as i16
                     };
                 }
                 CellValue::Empty { .. } => break,
@@ -742,7 +577,7 @@ impl Board {
         if !is_word(&cross_word) {
             return Err(MoveError::InvalidWord(cross_word));
         }
-        Ok(cross_score * central_cell.cell_type.word_multiplier() as u16)
+        Ok(cross_score * central_cell.cell_type.word_multiplier() as i16)
     }
 
     pub fn start_of_word(&self, reference_pos: Position, direction: Direction) -> Position {
@@ -800,7 +635,7 @@ impl Board {
 pub enum MoveCell {
     Open,
     Connecting { letter_set: LetterSet },
-    Filled { letter: Letter, score: u16 },
+    Filled { letter: Letter, score: i16 },
 }
 
 pub struct MoveIterator<'a> {
@@ -866,7 +701,7 @@ impl Iterator for MoveIterator<'_> {
                 let score = if is_blank {
                     0
                 } else {
-                    self.board.scrabble_variant.letter_values[letter.as_usize()] as u16
+                    self.board.scrabble_variant.letter_values[letter.as_usize()] as i16
                 };
                 Some((self.pos, MoveCell::Filled { letter, score }))
             }
@@ -879,123 +714,37 @@ impl Iterator for MoveIterator<'_> {
         result
     }
 }
-const CLS: &str = "\x1B[2J";
-const HOME: &str = "\x1B[H";
-const RED: &str = "\x1B[31m";
-const GREEN: &str = "\x1B[32m";
-const BLUE: &str = "\x1B[34m";
-const YELLOW: &str = "\x1B[33m";
-const MAGENTA: &str = "\x1B[35m";
-const CYAN: &str = "\x1B[36m";
-const WHITE: &str = "\x1B[37m";
-const BLACK: &str = "\x1B[30m";
-const RESET: &str = "\x1B[0m";
-const BOLDON: &str = "\x1B[1m";
-const BOLDOFF: &str = "\x1B[22m";
-const BACKGROUNDWHITE: &str = "\x1B[47m";
-const BACKGROUNDRED: &str = "\x1B[41m";
-const BACKGROUNDGREEN: &str = "\x1B[42m";
-const BACKGROUNDYELLOW: &str = "\x1B[43m";
-const BACKGROUNDBLUE: &str = "\x1B[44m";
-const BACKGROUNDMAGENTA: &str = "\x1B[45m";
-const BACKGROUNDCYAN: &str = "\x1B[46m";
-const BACKGROUNDRESET: &str = "\x1B[49m";
-const UNDERLINEON: &str = "\x1B[4m";
-const UNDERLINEOFF: &str = "\x1B[24m";
-const BACKGROUNDBLACK: &str = "\x1B[40m";
-
-const GRIDCOLOUR: &str = WHITE;
-const TILECOLOUR: &str = BLUE;
-const BLANKCOLOUR: &str = MAGENTA;
-const LETTERCOLOUR: &str = WHITE;
-const SCORECOLOUR: &str = MAGENTA;
-const WORDCOLOUR: &str = CYAN;
-const BACKGROUND: &str = BACKGROUNDBLACK;
-
-//test board
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_board() {
-        let board = Board::new(&SCRABBLE_VARIANT_WORDFEUD);
-        println!("{}", board);
-    }
-
-    #[test]
-    fn test_chars() {
-        for n in 0x2500..0x257F {
-            if let Some(c) = std::char::from_u32(n) {
-                println!("{}: {}", n, c);
-            } else {
-                println!("{}: {}", n, "not a char");
-            }
-        }
-    }
-    #[test]
-    fn test_box_drawing() {
-        for n in 0x2500..0x257F {
-            if let Some(c) = std::char::from_u32(n) {
-                println!("{:x}: {}", n, c);
-            } else {
-                println!("{:x}: {}", n, "not a char");
-            }
-        }
-        println!("{:x}: {}", HORIZONTAL_BORDER as u32, HORIZONTAL_BORDER);
-        println!("{:x}: {}", HORIZONTAL_LINE as u32, HORIZONTAL_LINE);
-        println!("{}", TOP_BORDER);
-        println!("{}", MIDDLE_BORDER);
-        println!("{}", BOTTOM_BORDER);
-
-        // use ANSI escape codes to clear the screen
-        print!("\x1B[2J\x1B[1;1H");
-        println!("{}", TOP_BORDER);
-    }
-
-    #[test]
-    // use ANSI escape codes to change the color
-    fn test_color() {
-        print!("\x1B[2J\x1B[1;1H");
-
-        // ANSI escape code to change the color to red
-        print!("\x1B[31m");
-        println!("{}", "red");
-        // ANSI escape code to change the color to green
-        print!("\x1B[32m");
-        println!("{} ", "green");
-        // ANSI escape code to change the color to blue
-        print!("\x1B[34m");
-        println!("{} ", "blue");
-        // ANSI escape code to change the color to yellow
-        print!("\x1B[33m");
-        println!("{} ", "yellow");
-        // ANSI escape code to change the color to magenta
-        print!("\x1B[35m");
-        println!("{} ", "magenta");
-        // ANSI escape code to change the color to cyan
-        print!("\x1B[36m");
-        println!("{} ", "cyan");
-        // ANSI escape code to change the color to white
-        print!("\x1B[37m");
-        println!("{} ", "white");
-        // ANSI escape code to change the color to reset
-        print!("\x1B[0m");
-        println!("{} ", "reset");
-        // ANSI escape code to change the color to bold
-        print!("\x1B[1m");
-        println!("{} ", "bold");
-        // ANSI escape code to change the color to underline
-        print!("\x1B[4m");
-        println!("{} ", "underline");
-        // ANSI escape code to change the color to blink
-        print!("\x1B[5m");
-        println!("{} ", "blink");
-        // ANSI escape code to change the color to reverse
-        print!("\x1B[7m");
-        println!("{} ", "reverse");
-        // ANSI escape code to change the color to hidden
-        print!("\x1B[8m");
-        println!("{} ", "hidden");
-    }
+pub struct AnsiCodes;
+#[allow(unused, dead_code)]
+impl AnsiCodes {
+    const CLS: &str = "\x1B[2J";
+    const HOME: &str = "\x1B[H";
+    const RED: &str = "\x1B[31m";
+    const GREEN: &str = "\x1B[32m";
+    const BLUE: &str = "\x1B[34m";
+    const YELLOW: &str = "\x1B[33m";
+    const MAGENTA: &str = "\x1B[35m";
+    const CYAN: &str = "\x1B[36m";
+    const WHITE: &str = "\x1B[37m";
+    const BLACK: &str = "\x1B[30m";
+    const RESET: &str = "\x1B[0m";
+    const BOLDON: &str = "\x1B[1m";
+    const BOLDOFF: &str = "\x1B[22m";
+    const BACKGROUNDWHITE: &str = "\x1B[47m";
+    const BACKGROUNDRED: &str = "\x1B[41m";
+    const BACKGROUNDGREEN: &str = "\x1B[42m";
+    const BACKGROUNDYELLOW: &str = "\x1B[43m";
+    const BACKGROUNDBLUE: &str = "\x1B[44m";
+    const BACKGROUNDMAGENTA: &str = "\x1B[45m";
+    const BACKGROUNDCYAN: &str = "\x1B[46m";
+    const BACKGROUNDRESET: &str = "\x1B[49m";
+    const UNDERLINEON: &str = "\x1B[4m";
+    const UNDERLINEOFF: &str = "\x1B[24m";
+    const BACKGROUNDBLACK: &str = "\x1B[40m";
 }
+
+const GRIDCOLOUR: &str = AnsiCodes::WHITE;
+const TILECOLOUR: &str = AnsiCodes::BLUE;
+const BLANKCOLOUR: &str = AnsiCodes::MAGENTA;
+const LETTERCOLOUR: &str = AnsiCodes::WHITE;
+const BACKGROUND: &str = AnsiCodes::BACKGROUNDBLACK;

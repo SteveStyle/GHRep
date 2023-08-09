@@ -1,11 +1,8 @@
-use std::{
-    fmt::{Display, Formatter},
-    sync::Arc,
-};
+use std::fmt::{Display, Formatter};
 
 use rand::Rng;
 
-use crate::{board::ScrabbleVariant, MoveError};
+use crate::{board::ScrabbleVariant, MoveError, TScore};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct LetterSet {
@@ -321,19 +318,14 @@ impl TileBag {
             } => self.blanks,
         }
     }
-    pub(crate) fn sum_tile_values(&self, scrabble_variant: &ScrabbleVariant) -> u16 {
+    pub(crate) fn sum_tile_values(&self, scrabble_variant: &ScrabbleVariant) -> TScore {
         let mut sum = 0;
         for (letter, letter_count) in self.letters.iter().enumerate() {
             sum += letter_count * scrabble_variant.letter_values[letter];
         }
-        sum as u16
+        sum as TScore
     }
-    pub(crate) fn count_letter(&self, letter: Letter) -> u8 {
-        self.letters[letter.as_usize()]
-    }
-    fn count_blanks(&self) -> u8 {
-        self.blanks
-    }
+
     fn random_tile(&self) -> Tile {
         let mut rng = rand::thread_rng();
         let count = self.count();
@@ -352,10 +344,6 @@ impl TileBag {
             }
             panic!("random_tile failed");
         }
-    }
-    fn add_random(&mut self, bag: &mut TileBag) {
-        let tile = bag.random_tile();
-        self.take_tile_from(bag, tile);
     }
 
     fn add_tile(&mut self, tile: Tile) {
@@ -388,11 +376,6 @@ impl TileBag {
             this_bag.try_remove_tile(*tile)?;
         }
         Ok(())
-    }
-
-    fn take_tile_from(&mut self, other: &mut TileBag, tile: Tile) {
-        self.add_tile(tile);
-        other.remove_tile(tile);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -528,7 +511,6 @@ impl TileList {
 // test BitArray
 #[cfg(test)]
 mod tests {
-    use std::mem::size_of;
 
     use super::*;
 

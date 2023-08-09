@@ -1,15 +1,12 @@
 use std::{
-    collections::HashSet,
     fmt::{Display, Formatter},
     ops::Neg,
-    sync::atomic::AtomicBool,
-    thread::current,
 };
 
-use board::{Board, CellValue, MoveCell, WordPositions};
+use board::{CellValue, MoveCell};
 use pos::Position;
-use rand::seq::index;
-use tiles::{Letter, LetterSet, Tile, TileBag, TileList, ALPHABET};
+
+use tiles::{Tile, TileBag, TileList, ALPHABET};
 use utils::Timer;
 
 use crate::word_list::is_word;
@@ -22,6 +19,8 @@ pub mod word_list;
 pub mod pos;
 pub mod utils;
 
+pub type TScore = i16;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PlayerType {
     Human,
@@ -31,7 +30,7 @@ pub enum PlayerType {
 pub struct Player {
     pub player_type: PlayerType,
     pub rack: tiles::TileBag,
-    pub score: u16,
+    pub score: TScore,
     pub passes: u8,
     pub exchanges: u8,
     pub timer: Timer,
@@ -99,23 +98,9 @@ impl Neg for Direction {
     }
 }
 
-impl Direction {
-    fn get_step(&self) -> Position {
-        match self {
-            Direction::Horizontal => Position::new(1, 0),
-            Direction::Vertical => Position::new(0, 1),
-        }
-    }
-}
-
 pub struct MovePositionMap {
     positions: Vec<Position>,
     position_types: Vec<MoveCell>,
-    previous_cell_pos: Option<Position>,
-    next_cell_pos: Option<Position>,
-    min_tiles: u8,
-    max_tiles: u8,
-    word_multiplier: u8,
 }
 
 impl MovePositionMap {
@@ -130,7 +115,7 @@ pub struct GameMove {
     pub starting_position: Position,
     pub direction: Direction,
     pub tiles: TileList,
-    pub score: u16,
+    pub score: TScore,
 }
 
 impl GameMove {
@@ -138,7 +123,7 @@ impl GameMove {
         starting_position: Position,
         direction: Direction,
         tiles: TileList,
-        score: u16,
+        score: TScore,
     ) -> Self {
         Self {
             starting_position,
@@ -165,11 +150,10 @@ pub enum GameMoveRecordDetail {
         starting_position: Position,
         direction: Direction,
         tiles: TileList,
-        score: u16,
+        score: i16,
         word: String,
     },
     Exchange {
-        no_tiles: u8,
         tiles: TileList,
     },
     Pass,
@@ -184,15 +168,11 @@ pub struct GameMoveRecord {
 impl Display for GameMoveRecordDetail {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            GameMoveRecordDetail::Move {
-                starting_position,
-                direction,
-                tiles,
-                score,
-                word,
-            } => write!(f, "{:3} points {}", score, word),
-            GameMoveRecordDetail::Exchange { no_tiles, tiles } => {
-                write!(f, "Exchange: {} tiles - {}", no_tiles, tiles)
+            GameMoveRecordDetail::Move { score, word, .. } => {
+                write!(f, "{:3} points {}", score, word)
+            }
+            GameMoveRecordDetail::Exchange { tiles } => {
+                write!(f, "Exchange: tiles - {}", tiles)
             }
             GameMoveRecordDetail::Pass => write!(f, "Pass"),
         }
@@ -297,7 +277,7 @@ impl Game {
     ) -> Self {
         is_word("the"); //  just to make sure the word list is loaded
 
-        let mut bag = tiles::TileBag::new(scrabble_variant);
+        let bag = tiles::TileBag::new(scrabble_variant);
 
         let board = board::Board::new(scrabble_variant);
         let next_player = 0;
@@ -416,7 +396,7 @@ impl Game {
         starting_position: Position,
         direction: Direction,
         tiles: &TileList,
-    ) -> Result<u16, MoveError> {
+    ) -> Result<i16, MoveError> {
         // returns the score of the move
         // check that the tiles are in the rack
         self.player[self.current_player]
@@ -427,8 +407,8 @@ impl Game {
 
         // apply tiles to the position map
         let mut word = String::new();
-        let mut main_word_score: u16 = 0;
-        let mut connecting_word_scores = 0u16;
+        let mut main_word_score: i16 = 0;
+        let mut connecting_word_scores = 0i16;
         let mut word_multiplier = 1u8;
         let mut tile_idx = 0;
         let number_of_tiles = tiles.0.len();
@@ -448,7 +428,7 @@ impl Game {
                     let cell = self.board.get_cell_pos(current_pos);
                     let letter_multiplier = cell.cell_type.letter_multiplier();
                     main_word_score +=
-                        (tile.score(self.scrabble_variant) * letter_multiplier) as u16;
+                        (tile.score(self.scrabble_variant) * letter_multiplier) as TScore;
                     word_multiplier *= cell.cell_type.word_multiplier();
 
                     if let MoveCell::Connecting { letter_set } = move_cell {
@@ -474,10 +454,10 @@ impl Game {
         if !is_word(&word) {
             return Err(MoveError::InvalidWord(word));
         }
-        let score = main_word_score * word_multiplier as u16
+        let score = main_word_score * word_multiplier as TScore
             + connecting_word_scores
             + if tile_idx == 7 {
-                self.scrabble_variant.bingo_bonus as u16
+                self.scrabble_variant.bingo_bonus as TScore
             } else {
                 0
             };
@@ -490,8 +470,8 @@ impl Game {
         starting_position: Position,
         direction: Direction,
         tile_list: &TileList,
-        score: u16,
-    ) -> Result<bool, MoveError> {
+        score: i16,
+    ) -> Result<(), MoveError> {
         self.board.reset_last_move_flags();
 
         let player = &mut self.player[self.current_player];
@@ -541,7 +521,7 @@ impl Game {
         player.last_move = self.moves.len() - 1;
 
         player.rack.fill_rack(&mut self.bag);
-        player.score += score as u16;
+        player.score += score;
 
         player.timer.stop();
 
@@ -554,7 +534,7 @@ impl Game {
             self.first_move = false;
         }
 
-        Ok(self.is_over)
+        Ok(())
     }
 
     pub fn exchange_tiles(&mut self, tiles: &TileList) -> Result<(), MoveError> {
@@ -574,7 +554,6 @@ impl Game {
             player: self.current_player,
             player_name: self.player_name[self.current_player].clone(),
             detail: GameMoveRecordDetail::Exchange {
-                no_tiles: tiles.0.len() as u8,
                 tiles: tiles.clone(),
             },
         });
@@ -593,7 +572,7 @@ impl Game {
         Ok(())
     }
 
-    pub fn pass(&mut self) -> Result<(), MoveError> {
+    pub fn pass(&mut self) {
         self.moves.push(GameMoveRecord {
             player: self.current_player,
             player_name: self.player_name[self.current_player].clone(),
@@ -612,7 +591,6 @@ impl Game {
             self.current_player = (self.current_player + 1) % self.number_of_players;
             self.player[self.current_player].timer.start();
         }
-        Ok(())
     }
 
     pub fn quit(&mut self) {
@@ -641,7 +619,7 @@ impl Game {
             return Err(MoveError::TilesDonNotFit);
         }
         let score = self.validate_move(starting_position, direction, &tiles)?;
-        let game_over = self.apply_move(starting_position, direction, &tiles, score)?;
+        self.apply_move(starting_position, direction, &tiles, score)?;
 
         self.last_player_to_play = Some(self.current_player);
         self.reset_current_player_stats();
@@ -678,7 +656,6 @@ impl Game {
         }
 
         if (current_tile_list.len() as u8) < max_tiles && !current_rack.is_empty() {
-            let has_blanks = current_rack.blanks > 0;
             for &letter in ALPHABET {
                 if current_rack.contains(letter) {
                     let mut new_tile_list = current_tile_list.clone();
@@ -718,7 +695,7 @@ impl Game {
         }
     }
 
-    pub fn computer_move(&mut self) -> Result<u16, MoveError> {
+    pub fn computer_move(&mut self) {
         let start_pos = Position::new(7, 7);
         let direction = Direction::Horizontal;
         let best_move = &mut GameMove::new(start_pos, direction, TileList::new(), 0);
@@ -744,17 +721,16 @@ impl Game {
         }
 
         if best_move.score == 0 {
-            self.computer_no_move()?;
+            self.computer_no_move().unwrap();
         } else {
-            let game_over = self.apply_move(
+            self.apply_move(
                 best_move.starting_position,
                 best_move.direction,
                 &best_move.tiles,
                 best_move.score,
-            )?;
+            )
+            .unwrap();
         }
-
-        Ok(best_move.score)
     }
 
     fn computer_no_move(&mut self) -> Result<(), MoveError> {
@@ -767,7 +743,6 @@ impl Game {
             self.exchange_tiles(&tiles)?;
             return Ok(());
         } else {
-            self.pass()?;
             return Ok(());
         }
     }
@@ -777,7 +752,7 @@ impl Game {
         let mut draw = false;
         // if the current player has no tiles left, they get the sum of all the tiles in the other players racks
         // otherwise, each player has the sum of their rack deducted from their score
-        let mut racks_total = 0;
+        let mut racks_total: TScore = 0;
         for player in self.player.iter() {
             racks_total += player.rack.sum_tile_values(self.scrabble_variant);
         }
@@ -795,7 +770,7 @@ impl Game {
         let mut winner = 0;
         for (i, player) in self.player.iter().enumerate() {
             if player.score == max_score {
-                draw == true;
+                draw = true;
             } else if player.score > max_score {
                 max_score = player.score;
                 winner = i;

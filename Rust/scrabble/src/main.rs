@@ -1,4 +1,3 @@
-use std::cell;
 use std::io;
 use std::str::FromStr;
 
@@ -7,13 +6,10 @@ use scrabble::board::SCRABBLE_VARIANT_OFFICIAL;
 use scrabble::board::SCRABBLE_VARIANT_WORDFEUD;
 use scrabble::*;
 
-use chrono::Local;
 use scrabble::board::ScrabbleVariant;
 use scrabble::pos::Position;
-use scrabble::tiles::{Letter, TileList};
+use scrabble::tiles::TileList;
 use scrabble::word_list::is_word;
-
-use crate::utils::Timer;
 
 //TO DO : use terminal escape codes to clear the screen
 //https://stackoverflow.com/questions/2979383/c-clear-the-console
@@ -21,13 +17,10 @@ use crate::utils::Timer;
 //https://stackoverflow.com/questions/2616906/how-do-i-output-coloured-text-to-a-linux-terminal
 
 fn main() {
-    //let mut game = Game::new(&SCRABBLE_VARIANT_OFFICIAL);
-    //game.computer_move();
-
     menu_top();
 }
 
-fn menu_top() -> Result<(), UserCancelError> {
+fn menu_top() {
     let mut game: Option<Game> = None;
     loop {
         // clear the screen
@@ -67,10 +60,8 @@ fn menu_top() -> Result<(), UserCancelError> {
                 }
             }
             "5" => {
-                if let Some(g) = game.as_ref() {
-                    if let Ok(g2) = restart_game(g) {
-                        game = Some(g2);
-                    }
+                if let Some(g) = game.as_mut() {
+                    g.restart();
                 }
             }
 
@@ -81,7 +72,6 @@ fn menu_top() -> Result<(), UserCancelError> {
             }
         }
     }
-    Ok(())
 }
 
 #[derive(Debug, PartialEq)]
@@ -222,7 +212,7 @@ fn human_move(game: &mut Game) -> Result<(), UserCancelError> {
     let menu_choice = get_user_input_string("Enter choice: ", "0", true).unwrap_or("0".to_string());
     match menu_choice.trim() {
         "1" => {
-            play_word(game);
+            play_word(game).unwrap();
         }
         "2" => {
             game.pass();
@@ -244,7 +234,7 @@ fn human_move(game: &mut Game) -> Result<(), UserCancelError> {
             }
         }
         "5" => {
-            computer_suggestion(game);
+            computer_suggestion(game).unwrap();
         }
         "0" => {
             if get_user_input_bool(
@@ -280,19 +270,13 @@ fn computer_suggestion(game: &mut Game) -> Result<(), UserCancelError> {
     println!("{}", game_copy);
     let last_move = game_copy.last_move().unwrap().clone();
     match last_move.detail.clone() {
-        GameMoveRecordDetail::Move {
-            starting_position,
-            direction,
-            tiles,
-            score,
-            word,
-        } => {
+        GameMoveRecordDetail::Move { score, word, .. } => {
             println!(
                 "Suggested move: you could play {} for {} points.",
                 word, score
             );
         }
-        GameMoveRecordDetail::Exchange { no_tiles, tiles } => {
+        GameMoveRecordDetail::Exchange { tiles } => {
             println!("Suggestion: you could exchange these tiles, {}", tiles);
         }
         GameMoveRecordDetail::Pass => {
@@ -308,9 +292,6 @@ fn computer_suggestion(game: &mut Game) -> Result<(), UserCancelError> {
 
 fn play_word(game: &mut Game) -> Result<(), UserCancelError> {
     // capture the starting cell
-    let mut starting_position: Position;
-    let mut direction: Direction;
-    let mut tiles: String;
 
     loop {
         let starting_position = get_user_input_position("Enter starting position", "H8")?;
@@ -332,43 +313,6 @@ fn play_word(game: &mut Game) -> Result<(), UserCancelError> {
 }
 
 fn human_vs_human() -> Result<Game, UserCancelError> {
-    /*
-    let mut game = Game::new(&SCRABBLE_VARIANT_OFFICIAL);
-    let timer1 = Timer::new(false);
-
-    let mut result1 = game.computer_move();
-    while !game.is_over {
-        let mut input = String::new();
-        println!("Your rack is {} ", game.players[0].rack);
-        println!("Enter a move: ");
-        io::stdin().read_line(&mut input).unwrap();
-
-        println!("You entered: {}", input);
-
-        match game.human_move(&input, MoveType::Play) {
-            Ok(_) => println!("{}", game),
-            Err(e) => println!("Move rejected: {:?}", e),
-        }
-
-        let mut input = String::new();
-        println!("Your rack is {} ", game.players[1].rack);
-        println!("Enter a move: ");
-        io::stdin().read_line(&mut input).unwrap();
-
-        println!("You entered: {}", input);
-
-        match game.human_move(&input, MoveType::Play) {
-            Ok(_) => println!("{}", game),
-            Err(e) => println!("Move rejected: {:?}", e),
-        }
-    }
-
-    let elapsed = timer.elapsed();
-
-    println!("{}", game);
-
-    println!("Time taken: {} seconds", elapsed.as_secs_f64());
-    */
     let mut game = Game::new(
         &SCRABBLE_VARIANT_OFFICIAL,
         2,
@@ -381,16 +325,8 @@ fn human_vs_human() -> Result<Game, UserCancelError> {
         ],
     );
 
-    play_game(&mut game);
+    play_game(&mut game).unwrap();
 
-    Ok(game)
-}
-
-fn restart_game(game: &Game) -> Result<Game, UserCancelError> {
-    let mut game = game.clone();
-    game.restart();
-
-    play_game(&mut game);
     Ok(game)
 }
 
@@ -402,15 +338,6 @@ fn look_up_word() {
         false => println!("{} is not a word", word),
     }
     }
-}
-
-fn check_word(word: &str) -> bool {
-    let result = is_word(&word.trim().to_uppercase());
-    match result {
-        true => println!("{word} is a word.  Follow the link for the definition:  https://www.collinsdictionary.com/dictionary/english/{word}"),
-        false => println!("{} is not a word", word),
-    }
-    result
 }
 
 fn get_user_input_string(
