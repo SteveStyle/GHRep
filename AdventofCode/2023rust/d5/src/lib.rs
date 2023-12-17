@@ -3,6 +3,8 @@ use chrono::Local;
 
 const INPUT: &'static str = include_str!("input.txt");
 
+mod seeds;
+mod seeds2;
 mod utils;
 
 pub fn show_totals() {
@@ -27,11 +29,11 @@ pub fn show_totals() {
 }
 
 fn process_input(input: &str) -> u32 {
-    0
+    seeds::Almanac::from_string(input).minimal_location() as u32
 }
 
 fn process_input2(input: &str) -> u32 {
-    0
+    seeds2::Almanac2::from_string(input).minimal_location() as u32
 }
 
 #[cfg(test)]
@@ -82,6 +84,6 @@ humidity-to-location map:
     #[test]
     fn test_process_input2() {
         let result = process_input2(EXAMPLE_INPUT);
-        assert_eq!(result, 30);
+        assert_eq!(result, 46);
     }
 }
