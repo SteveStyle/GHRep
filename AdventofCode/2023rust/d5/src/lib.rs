@@ -86,4 +86,5 @@ humidity-to-location map:
         let result = process_input2(EXAMPLE_INPUT);
         assert_eq!(result, 46);
     }
+
 }
