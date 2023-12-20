@@ -115,25 +115,31 @@ impl Rule {
     fn delta(&self) -> i64 {
         self.dest_start as i64 - self.source_start as i64
     }
-    fn apply(&self, source_range: Range, output_range: Vec<Range>) -> (Vec<Range>, Option<Range>) {
-        (
-            self.source_range().without(&source_range),
-            match self.source_range().intersection(&source_range) {
-                Some(intersection) => Some(intersection + self.delta()),
-                None => None,
+    fn apply(
+        &self,
+        mut source_ranges: Vec<Range>,
+        mut output_ranges: Vec<Range>,
+        source_range: Range,
+    ) -> (Vec<Range>, Vec<Range>) {
+        source_ranges.append(&mut source_range.without(&self.source_range()));
+
+        match source_range.intersection(&self.source_range()) {
+            Some(intersection) => output_ranges.push(intersection + self.delta()),
+            None => {}
+        }
+        (source_ranges, output_ranges)
+    }
+    fn apply_to_vec(
+        &self,
+        source_ranges: Vec<Range>,
+        mut output_ranges: Vec<Range>,
+    ) -> (Vec<Range>, Vec<Range>) {
+        source_ranges.into_iter().fold(
+            (Vec::new(), output_ranges),
+            |(mut source_ranges, mut output_ranges), source_range| {
+                self.apply(source_ranges, output_ranges, source_range)
             },
         )
-    }
-    fn apply_to_vec(&self, source_ranges: Vec<Range>, output_ranges: Vec<Range>) -> (Vec<Range>,Vec<Range>) {
-        println!("applying rule: {}", self);
-        
-        
-        source_ranges
-            .iter()
-            .map(|source_range| self.apply(source_range))
-            
-            .filter_map(|x| x)
-            .collect::<Vec<Range>>()
     }
 }
 
@@ -273,12 +279,15 @@ impl Almanac2 {
         {
             Some(map) => {
                 println!("applying map: {}", map.source_type);
-                self.current_values = map
-                    .rules
-                    .iter()
-                    .map(|rule| rule.apply_to_vec(&self.current_values))
-                    .flatten()
-                    .collect::<Vec<Range>>();
+                let (source_ranges, mut output_ranges) = map.rules.iter().fold(
+                    (self.current_values.clone(), Vec::new()),
+                    |(mut source_ranges, mut output_ranges), rule| {
+                        rule.apply_to_vec(source_ranges, output_ranges)
+                    },
+                );
+                self.current_values = source_ranges;
+                self.current_values.append(&mut output_ranges);
+
                 self.current_type = map.dest_type.clone();
                 true
             }
