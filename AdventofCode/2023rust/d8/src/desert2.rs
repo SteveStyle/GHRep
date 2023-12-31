@@ -48,9 +48,19 @@ enum NodeType {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Node {
-    left: usize,
-    right: usize,
+    next_nodes: [usize; 2],
     node_type: NodeType,
+}
+
+struct EndNode {
+    node: usize,
+    step: usize,
+    base_iterations: usize,
+    repeat_iterations: usize,
+}
+struct StartNode {
+    node: usize,
+    end_nodes: Vec<EndNode>,
 }
 pub struct Map {
     directions: Vec<Direction>,
@@ -59,6 +69,7 @@ pub struct Map {
     node_to_index: HashMap<String, usize>,
     index_to_node: HashMap<usize, String>,
     nodes_by_index: Vec<Node>,
+    start_nodes: Vec<StartNode>,
 }
 
 impl Map {
@@ -92,25 +103,59 @@ impl Map {
 
         let mut nodes_by_index = vec![
             Node {
-                left: 0,
-                right: 0,
+                next_nodes: [0, 0],
                 node_type: NodeType::Normal
             };
             nodes.len()
         ];
+        let mut start_nodes = Vec::new();
         for node in &nodes {
             let node_index = node_to_index[node.0];
             let node_left = node_to_index[&node.1[0]];
             let node_right = node_to_index[&node.1[1]];
-            nodes_by_index[node_index] = Node {
-                left: node_left,
-                right: node_right,
-                node_type: match &node.0.as_str()[2..3] {
-                    "A" => NodeType::Start,
-                    "Z" => NodeType::End,
-                    _ => NodeType::Normal,
-                },
+            let node_type = match &node.0.as_str()[2..3] {
+                "A" => NodeType::Start,
+                "Z" => NodeType::End,
+                _ => NodeType::Normal,
             };
+            nodes_by_index[node_index] = Node {
+                next_nodes: [node_left, node_right],
+                node_type,
+            };
+            if node_type == NodeType::Start {
+                start_nodes.push(StartNode {
+                    node: node_index,
+                    end_nodes: Vec::new(),
+                });
+            }
+        }
+
+        let directions_length = directions.len();
+
+        let end_nodes_found = Vec::new();
+        for start_node in &mut start_nodes {
+            let mut node = start_node.node;
+            let mut step = 0;
+            loop {
+                node =
+                    nodes_by_index[node].next_nodes[directions[step % directions_length] as usize];
+
+                step += 1;
+
+                if nodes_by_index[node].node_type == NodeType::End {
+                    if end_nodes_found.contains(&(node, step % directions_length)) {
+                    } else {
+                    }
+                    end_nodes_found.push((node, step % directions_length));
+
+                    start_node.end_nodes.push(EndNode {
+                        node,
+                        step: step % directions_length,
+                        base_iterations: step / directions_length,
+                        repeat_iterations: 0,
+                    });
+                }
+            }
         }
 
         Map {
@@ -120,6 +165,7 @@ impl Map {
             node_to_index,
             index_to_node,
             nodes_by_index,
+            start_nodes,
         }
     }
     pub fn count_steps(&self) -> usize {
