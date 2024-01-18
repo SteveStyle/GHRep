@@ -2,6 +2,7 @@ use regex::Regex;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+
 pub fn get_numbers<T: FromStr>(source: &str) -> Vec<T>
 where
     T::Err: std::fmt::Debug, /* add to toml

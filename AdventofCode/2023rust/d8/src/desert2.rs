@@ -4,6 +4,10 @@ use std::{
     str::FromStr,
 };
 
+use crate::modular::Modular;
+
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Direction {
     Left = 0,
@@ -52,16 +56,19 @@ struct Node {
     node_type: NodeType,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct EndNode {
     node: usize,
     step: usize,
     base_iterations: usize,
     repeat_iterations: usize,
 }
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct StartNode {
     node: usize,
     end_nodes: Vec<EndNode>,
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Map {
     directions: Vec<Direction>,
     directions_as_usize: Vec<usize>,
@@ -132,33 +139,51 @@ impl Map {
 
         let directions_length = directions.len();
 
-        let end_nodes_found = Vec::new();
         for start_node in &mut start_nodes {
             let mut node = start_node.node;
             let mut step = 0;
+            let mut base_iterations = 0;
+            let mut repeat_iterations = 0;
+            let mut first_repeated_end_node_index = 0;
+            let mut end_nodes_found: HashMap<(usize, usize), usize> = HashMap::new(); // (node, step) -> end_node_index
             loop {
-                node =
-                    nodes_by_index[node].next_nodes[directions[step % directions_length] as usize];
+                node = nodes_by_index[node].next_nodes[directions_as_usize[step]];
 
                 step += 1;
+                if step == directions_length {
+                    base_iterations += 1;
+                    step = 0;
+                }
 
                 if nodes_by_index[node].node_type == NodeType::End {
-                    if end_nodes_found.contains(&(node, step % directions_length)) {
-                    } else {
+                    match end_nodes_found.get(&(node, step)) {
+                        Some(end_node_index) => {
+                            first_repeated_end_node_index = *end_node_index;
+                            repeat_iterations = base_iterations
+                                - start_node.end_nodes[*end_node_index].base_iterations;
+                            break;
+                        }
+                        None => {}
                     }
-                    end_nodes_found.push((node, step % directions_length));
+                    end_nodes_found.insert((node, step), start_node.end_nodes.len());
 
                     start_node.end_nodes.push(EndNode {
                         node,
-                        step: step % directions_length,
-                        base_iterations: step / directions_length,
+                        step,
+                        base_iterations,
                         repeat_iterations: 0,
                     });
                 }
             }
+            if repeat_iterations == 0 {
+                panic!("No repeat iterations found");
+            }
+            for end_node_index in first_repeated_end_node_index..start_node.end_nodes.len() {
+                start_node.end_nodes[end_node_index].repeat_iterations = repeat_iterations;
+            }
         }
 
-        Map {
+        let map = Map {
             directions,
             directions_as_usize,
             nodes,
@@ -166,8 +191,12 @@ impl Map {
             index_to_node,
             nodes_by_index,
             start_nodes,
-        }
+        };
+
+        println!("map: {:?}", map);
+        map
     }
+
     pub fn count_steps(&self) -> usize {
         let mut step: usize = 0;
         let mut nodes = self
@@ -229,3 +258,23 @@ const EXAMPLE_INPUT2: &str = "LLR
 AAA = (BBB, BBB)
 BBB = (AAA, ZZZ)
 ZZZ = (ZZZ, ZZZ)";
+
+const EXAMPLE_INPUT3: &str = "LR
+
+11A = (11B, XXX)
+11B = (XXX, 11Z)
+11Z = (11B, XXX)
+22A = (22B, XXX)
+22B = (22C, 22C)
+22C = (22Z, 22Z)
+22Z = (22B, 22B)
+XXX = (XXX, XXX)";
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_string() {
+        let map = Map::from_string(EXAMPLE_INPUT3);
+    }
+}

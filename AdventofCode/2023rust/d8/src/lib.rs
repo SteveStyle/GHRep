@@ -5,6 +5,8 @@ const INPUT: &'static str = include_str!("input.txt");
 
 mod desert;
 mod desert2;
+mod modular;
+mod modular2;
 mod utils;
 
 pub fn show_totals() {
