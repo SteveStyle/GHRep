@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    fmt::{self, Display, Formatter},
     iter::Product,
     ops::{Add, Mul},
 };
@@ -17,6 +18,12 @@ Types of constraints are:
 pub struct ModularConstraint {
     pub minimum_value: i64,
     pub modulus: i64,
+}
+
+impl Display for ModularConstraint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (mod {})", self.minimum_value, self.modulus)
+    }
 }
 
 impl ModularConstraint {
@@ -39,7 +46,7 @@ impl ModularConstraint {
     }
 
     fn intersection(&self, other: &Self) -> Option<Self> {
-        let (g, x, y) = modular::Modular::bezout(self.modulus, other.modulus);
+        let (g, x, _) = modular::Modular::bezout(self.modulus, other.modulus);
         let diff = (other.minimum_value - self.minimum_value);
         if diff % g != 0 {
             return None;
@@ -61,7 +68,18 @@ pub struct ComplexConstraint {
     pub modular_constraints: Vec<ModularConstraint>,
     pub specific_value_constraints: Vec<SpecificValueConstraint>,
 }
-
+impl Display for ComplexConstraint {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut result = String::new();
+        for modular_constraint in &self.modular_constraints {
+            result.push_str(&format!("{} ", modular_constraint));
+        }
+        for specific_value_constraint in &self.specific_value_constraints {
+            result.push_str(&format!("{} ", specific_value_constraint));
+        }
+        write!(f, "{}", result)
+    }
+}
 impl ComplexConstraint {
     pub fn new() -> Self {
         ComplexConstraint {

@@ -228,7 +228,6 @@ impl Map {
             start_nodes,
         };
 
-        println!("map: {:?}", map);
         map
     }
 
@@ -236,16 +235,37 @@ impl Map {
         assert!(self.start_nodes.len() > 0);
         // find the steps which occur in all start nodes
         let mut steps = self.start_nodes[0].get_steps();
-        for start_node in &self.start_nodes {
+        println!(
+            "the first start node covers {} steps: {:?}.",
+            steps.len(),
+            steps
+        );
+
+        for start_node in &self.start_nodes[1..] {
             steps = steps
                 .intersection(&start_node.get_steps())
                 .copied()
                 .collect();
         }
 
+        println!(
+            "{} steps covered by all start nodes: {:?}",
+            steps.len(),
+            steps
+        );
+
         let mut least_step = usize::MAX;
         for step in steps {
             // take the intersection of all constraints for this step
+            for start_node in &self.start_nodes {
+                println!(
+                    "start node {} constraint for step {}: {}",
+                    start_node.node,
+                    step,
+                    start_node.constraint_for_step(step)
+                );
+            }
+
             let mut constraint = self.start_nodes[0].constraint_for_step(step);
             for start_node in &self.start_nodes[1..] {
                 constraint = constraint.intersection(&start_node.constraint_for_step(step));
