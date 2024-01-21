@@ -1,12 +1,13 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
 
-use crate::modular::Modular;
-
-
+use crate::{
+    modular::Modular,
+    modular2::{ComplexConstraint, ModularConstraint},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Direction {
@@ -60,13 +61,47 @@ struct Node {
 struct EndNode {
     node: usize,
     step: usize,
-    base_iterations: usize,
-    repeat_iterations: usize,
+    base_iterations: i64,
+    repeat_iterations: i64,
+}
+
+impl EndNode {
+    fn add_to_constraint(&self, constraint: &mut ComplexConstraint) {
+        if self.repeat_iterations == 0 {
+            constraint
+                .specific_value_constraints
+                .push(self.base_iterations as i64);
+        } else {
+            constraint.modular_constraints.push(ModularConstraint::new(
+                self.base_iterations as i64,
+                self.repeat_iterations as i64,
+            ));
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct StartNode {
     node: usize,
     end_nodes: Vec<EndNode>,
+}
+
+impl StartNode {
+    fn constraint_for_step(&self, step: usize) -> ComplexConstraint {
+        let mut constraint = ComplexConstraint::new();
+        for end_node in &self.end_nodes {
+            if end_node.step == step {
+                end_node.add_to_constraint(&mut constraint);
+            }
+        }
+        constraint
+    }
+    fn get_steps(&self) -> HashSet<usize> {
+        let mut steps = HashSet::new();
+        for end_node in &self.end_nodes {
+            steps.insert(end_node.step);
+        }
+        steps
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Map {
@@ -198,26 +233,29 @@ impl Map {
     }
 
     pub fn count_steps(&self) -> usize {
-        let mut step: usize = 0;
-        let mut nodes = self
-            .nodes
-            .keys()
-            .filter(|k| k.ends_with("A"))
-            .collect::<Vec<&String>>();
-
-        println!("nodes: {:?}", nodes);
-        loop {
-            for node in nodes.iter_mut() {
-                *node = &self.nodes[*node][self.directions[step % self.directions.len()] as usize];
-            }
-            println!("nodes: {:?}", nodes);
-            step += 1;
-            if nodes.iter().all(|n| n.ends_with("Z")) {
-                break;
-            }
+        assert!(self.start_nodes.len() > 0);
+        // find the steps which occur in all start nodes
+        let mut steps = self.start_nodes[0].get_steps();
+        for start_node in &self.start_nodes {
+            steps = steps
+                .intersection(&start_node.get_steps())
+                .copied()
+                .collect();
         }
 
-        step
+        let mut least_step = usize::MAX;
+        for step in steps {
+            // take the intersection of all constraints for this step
+            let mut constraint = self.start_nodes[0].constraint_for_step(step);
+            for start_node in &self.start_nodes[1..] {
+                constraint = constraint.intersection(&start_node.constraint_for_step(step));
+            }
+            let least_iterations = constraint.least_value();
+            let least_steps = step as i64 + least_iterations * self.directions.len() as i64;
+            least_step = least_step.min(least_steps as usize);
+        }
+
+        least_step
     }
     pub fn count_steps_old(&self) -> usize {
         let mut step: usize = 0;
