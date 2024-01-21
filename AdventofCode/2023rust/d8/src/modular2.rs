@@ -45,7 +45,7 @@ impl ModularConstraint {
 
     fn intersection(&self, other: &Self) -> Option<Self> {
         let (g, x, _) = modular::Modular::bezout(self.modulus, other.modulus);
-        let diff = other.minimum_value - self.minimum_value;
+        let diff = (other.minimum_value - self.minimum_value);
         if diff % g != 0 {
             return None;
         }
