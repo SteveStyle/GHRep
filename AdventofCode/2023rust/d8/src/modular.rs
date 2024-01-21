@@ -1,11 +1,11 @@
 // a module to calculate inverses in a modular ring, and to solve Bézout's identity
 // for the modular ring
 
-use std::cmp::Ordering;
-use std::collections::HashMap;
+
+
 use std::fmt::{self, Display, Formatter};
-use std::ops::{Add, Div, Mul, Neg, Sub};
-use std::str::FromStr;
+use std::ops::{Add, Mul, Sub};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Modular {
@@ -121,7 +121,7 @@ impl Modular {
 }
 
 mod tests {
-    use super::*;
+    
 
     #[test]
     fn test_modular() {
