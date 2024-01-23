@@ -3,10 +3,7 @@ use chrono::Local;
 
 const INPUT: &'static str = include_str!("input.txt");
 
-mod desert;
-mod desert2;
-mod modular;
-mod modular2;
+mod sequences;
 mod utils;
 
 pub fn show_totals() {
@@ -31,11 +28,11 @@ pub fn show_totals() {
 }
 
 fn process_input(input: &str) -> usize {
-    desert::Map::from_string(input).count_steps()
+    sequences::Sequences::from_string(input).sum_next_values() as usize
 }
 
 fn process_input2(input: &str) -> usize {
-    desert2::Map::from_string(input).count_steps()
+    sequences::Sequences::from_string(input).sum_previous_values() as usize
 }
 
 #[cfg(test)]
@@ -43,44 +40,18 @@ mod tests {
 
     use super::*;
 
-    const EXAMPLE_INPUT: &str = "RL
-
-AAA = (BBB, CCC)
-BBB = (DDD, EEE)
-CCC = (ZZZ, GGG)
-DDD = (DDD, DDD)
-EEE = (EEE, EEE)
-GGG = (GGG, GGG)
-ZZZ = (ZZZ, ZZZ)";
-
-    const EXAMPLE_INPUT2: &str = "LLR
-
-AAA = (BBB, BBB)
-BBB = (AAA, ZZZ)
-ZZZ = (ZZZ, ZZZ)";
-
-    const EXAMPLE_INPUT3: &str = "LR
-
-11A = (11B, XXX)
-11B = (XXX, 11Z)
-11Z = (11B, XXX)
-22A = (22B, XXX)
-22B = (22C, 22C)
-22C = (22Z, 22Z)
-22Z = (22B, 22B)
-XXX = (XXX, XXX)";
+    const EXAMPLE_INPUT: &str = "0 3 6 9 12 15
+1 3 6 10 15 21
+10 13 16 21 30 45";
 
     #[test]
     fn test_process_input() {
         let result = process_input(EXAMPLE_INPUT);
-        assert_eq!(result, 2);
-        let result = process_input(EXAMPLE_INPUT2);
-        assert_eq!(result, 6);
+        assert_eq!(result, 114);
     }
-
     #[test]
     fn test_process_input2() {
-        let result = process_input2(EXAMPLE_INPUT3);
-        assert_eq!(result, 6);
+        let result = process_input2(EXAMPLE_INPUT);
+        assert_eq!(result, 2);
     }
 }

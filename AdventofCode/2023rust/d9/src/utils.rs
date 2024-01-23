@@ -2,6 +2,8 @@ use regex::Regex;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
+// turn off warnings for unused code
+#[allow(dead_code)]
 
 pub fn get_numbers<T: FromStr>(source: &str) -> Vec<T>
 where
@@ -22,6 +24,7 @@ where
     return result;
 }
 
+#[allow(dead_code)]
 pub struct Timer<'a> {
     name: &'a str,
     start: Instant,
