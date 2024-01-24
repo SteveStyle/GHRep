@@ -28,7 +28,7 @@ pub fn show_totals() {
 }
 
 fn process_input(input: &str) -> usize {
-    pipes::PipeMap::from_string(input).max_distance()
+    pipes::PipeMap::from_string(input).calculate_distances()
 }
 
 fn process_input2(input: &str) -> usize {
