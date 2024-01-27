@@ -1,4 +1,3 @@
-use std::cell;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
     North = 0,
@@ -16,9 +15,17 @@ enum CellType {
 struct Cell {
     cell_type: CellType,
     distance: usize,
-    calculated: bool,
+    distance_calculated: bool,
+    from_direction: Option<Direction>,
+    to_direction: Option<Direction>,
 }
 
+struct Path {
+    x: usize,
+    y: usize,
+    distance: usize,
+    came_from: Direction,
+}
 pub struct PipeMap {
     cells: Vec<Vec<Cell>>,
     max_x: usize,
@@ -30,8 +37,8 @@ pub struct PipeMap {
 impl PipeMap {
     pub fn from_string(input: &str) -> Self {
         let mut cells = Vec::new();
-        let mut max_x = input.lines().next().unwrap().len() - 1;
-        let mut max_y = input.lines().count() - 1;
+        let max_x = input.lines().next().unwrap().len() - 1;
+        let max_y = input.lines().count() - 1;
         let mut start_x = usize::MAX;
         let mut start_y = usize::MAX;
         let mut start_found = false;
@@ -60,7 +67,9 @@ impl PipeMap {
                 row.push(Cell {
                     cell_type,
                     distance: 0,
-                    calculated: false,
+                    distance_calculated: false,
+                    from_direction: None,
+                    to_direction: None,
                 });
             }
             cells.push(row);
@@ -84,33 +93,32 @@ impl PipeMap {
     }
 
     pub fn calculate_distances(&mut self) -> usize {
-        let start_cell = self.get_cell_mut(self.start_x, self.start_y);
-        start_cell.calculated = true;
+        let start_x = self.start_x;
+        let start_y = self.start_y;
+        let max_x = self.max_x;
+        let max_y = self.max_y;
+
+        let start_cell = self.get_cell_mut(start_x, start_y);
+        start_cell.distance_calculated = true;
         let mut paths = Vec::new();
         if self.start_x > 0 {
-            if let CellType::Pipe(directions) =
-                self.get_cell(self.start_x - 1, self.start_y).cell_type
-            {
+            if let CellType::Pipe(directions) = self.get_cell(start_x - 1, start_y).cell_type {
                 if directions.contains(&Direction::East) {
                     paths.push(Path {
-                        pipe_map: self,
-                        x: self.start_x - 1,
-                        y: self.start_y,
+                        x: start_x - 1,
+                        y: start_y,
                         distance: 1,
                         came_from: Direction::East,
                     });
                 }
             }
         }
-        if self.start_x < self.max_x {
-            if let CellType::Pipe(directions) =
-                self.get_cell(self.start_x + 1, self.start_y).cell_type
-            {
+        if start_x < max_x {
+            if let CellType::Pipe(directions) = self.get_cell(start_x + 1, start_y).cell_type {
                 if directions.contains(&Direction::West) {
                     paths.push(Path {
-                        pipe_map: self,
-                        x: self.start_x + 1,
-                        y: self.start_y,
+                        x: start_x + 1,
+                        y: start_y,
                         distance: 1,
                         came_from: Direction::West,
                     });
@@ -118,30 +126,24 @@ impl PipeMap {
             }
         }
 
-        if self.start_y > 0 {
-            if let CellType::Pipe(directions) =
-                self.get_cell(self.start_x, self.start_y - 1).cell_type
-            {
+        if start_y > 0 {
+            if let CellType::Pipe(directions) = self.get_cell(start_x, start_y - 1).cell_type {
                 if directions.contains(&Direction::South) {
                     paths.push(Path {
-                        pipe_map: self,
-                        x: self.start_x,
-                        y: self.start_y - 1,
+                        x: start_x,
+                        y: start_y - 1,
                         distance: 1,
                         came_from: Direction::South,
                     });
                 }
             }
         }
-        if self.start_y < self.max_y {
-            if let CellType::Pipe(directions) =
-                self.get_cell(self.start_x, self.start_y + 1).cell_type
-            {
+        if start_y < max_y {
+            if let CellType::Pipe(directions) = self.get_cell(start_x, start_y + 1).cell_type {
                 if directions.contains(&Direction::North) {
                     paths.push(Path {
-                        pipe_map: self,
-                        x: self.start_x,
-                        y: self.start_y + 1,
+                        x: start_x,
+                        y: start_y + 1,
                         distance: 1,
                         came_from: Direction::North,
                     });
@@ -151,7 +153,7 @@ impl PipeMap {
         let mut max_distance = 0;
         'outer: loop {
             for path in &mut paths {
-                if path.next().is_none() {
+                if self.next(path).is_none() {
                     max_distance = path.distance;
                     break 'outer;
                 }
@@ -167,62 +169,53 @@ impl PipeMap {
             .max()
             .unwrap()
     }
-}
 
-struct Path {
-    pipe_map: &PipeMap,
-    x: usize,
-    y: usize,
-    distance: usize,
-    came_from: Direction,
-}
-
-impl Iterator for Path {
-    type Item = (usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let current_cell = self.pipe_map.get_cell_mut(self.x, self.y);
-        if current_cell.calculated {
+    fn next(&mut self, path: &mut Path) -> Option<(usize, usize)> {
+        let current_cell = self.get_cell_mut(path.x, path.y);
+        if current_cell.distance_calculated {
             return None;
         }
-        current_cell.calculated = true;
-        current_cell.distance = self.distance;
-        self.distance += 1;
-        for direction in current_cell.directions.iter() {
-            if direction == &self.came_from && self.cell_type != CellType::Start {
-                continue;
-            }
-            match direction {
-                Direction::North => {
-                    if self.y > 0 {
-                        self.y -= 1;
-                        self.came_from = Direction::South;
-                        return Some((self.x, self.y));
-                    }
+        current_cell.distance_calculated = true;
+        current_cell.distance = path.distance;
+        path.distance += 1;
+        if let CellType::Pipe(directions) = current_cell.cell_type {
+            for direction in directions.iter() {
+                if direction == &path.came_from {
+                    continue;
                 }
-                Direction::East => {
-                    if self.x < self.max_x {
-                        self.x += 1;
-                        self.came_from = Direction::West;
-                        return Some((self.x, self.y));
+                match direction {
+                    Direction::North => {
+                        if path.y > 0 {
+                            path.y -= 1;
+                            path.came_from = Direction::South;
+                            return Some((path.x, path.y));
+                        }
                     }
-                }
-                Direction::South => {
-                    if self.y < self.max_y {
-                        self.y += 1;
-                        self.came_from = Direction::North;
-                        return Some((self.x, self.y));
+                    Direction::East => {
+                        if path.x < self.max_x {
+                            path.x += 1;
+                            path.came_from = Direction::West;
+                            return Some((path.x, path.y));
+                        }
                     }
-                }
-                Direction::West => {
-                    if self.x > 0 {
-                        self.x -= 1;
-                        self.came_from = Direction::East;
-                        return Some((self.x, self.y));
+                    Direction::South => {
+                        if path.y < self.max_y {
+                            path.y += 1;
+                            path.came_from = Direction::North;
+                            return Some((path.x, path.y));
+                        }
+                    }
+                    Direction::West => {
+                        if path.x > 0 {
+                            path.x -= 1;
+                            path.came_from = Direction::East;
+                            return Some((path.x, path.y));
+                        }
                     }
                 }
             }
         }
+        None
     }
 }
 
