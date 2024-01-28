@@ -4,6 +4,7 @@ use chrono::Local;
 const INPUT: &'static str = include_str!("input.txt");
 
 mod pipes;
+mod pos;
 mod utils;
 
 pub fn show_totals() {

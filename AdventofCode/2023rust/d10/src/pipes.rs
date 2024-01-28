@@ -6,6 +6,24 @@ enum Direction {
     West,
 }
 
+impl Direction {
+    fn opposite(&self) -> Self {
+        match self {
+            Direction::North => Direction::South,
+            Direction::East => Direction::West,
+            Direction::South => Direction::North,
+            Direction::West => Direction::East,
+        }
+    }
+    fn clockwise_quarter_turns(&self, other: &Self) -> usize {
+        match (*other - *self).rem_euclid(4) {
+            3 => -1,
+            n => n,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CellType {
     Empty,
     Start,
@@ -16,16 +34,30 @@ struct Cell {
     cell_type: CellType,
     distance: usize,
     distance_calculated: bool,
-    from_direction: Option<Direction>,
-    to_direction: Option<Direction>,
+    previous_direction: Option<Direction>,
+    next_direction: Option<Direction>,
+    is_loop: bool,
+    is_inside_loop: Option<bool>,
 }
 
-struct Path {
-    x: usize,
-    y: usize,
-    distance: usize,
-    came_from: Direction,
+impl Cell {
+    fn set_previous_direction(&mut self, previous_direction: Direction) -> Direction {
+        if let CellType::Pipe(directions) = self.cell_type {
+            self.previous_direction = Some(previous_direction);
+            let next_direction = *(directions
+                .iter()
+                .find(|d| d != &&previous_direction)
+                .unwrap());
+            self.next_direction = Some(next_direction);
+            next_direction
+        } else {
+            panic!("Cannot set previous direction on non-pipe cell");
+        }
+    }
+
 }
+
+
 pub struct PipeMap {
     cells: Vec<Vec<Cell>>,
     max_x: usize,
@@ -68,8 +100,8 @@ impl PipeMap {
                     cell_type,
                     distance: 0,
                     distance_calculated: false,
-                    from_direction: None,
-                    to_direction: None,
+                    previous_direction: None,
+                    next_direction: None,
                 });
             }
             cells.push(row);
@@ -98,68 +130,102 @@ impl PipeMap {
         let max_x = self.max_x;
         let max_y = self.max_y;
 
+        let mut current_x = start_x;
+        let mut current_y = start_y;
+
+        let mut previous_direction: Direction;
+        let mut next_direction: Direction;
+        let mut distance_travelled = 0;
+        let mut clockwise_quarter_turns = 0;
+
         let start_cell = self.get_cell_mut(start_x, start_y);
         start_cell.distance_calculated = true;
         let mut paths = Vec::new();
         if self.start_x > 0 {
             if let CellType::Pipe(directions) = self.get_cell(start_x - 1, start_y).cell_type {
                 if directions.contains(&Direction::East) {
-                    paths.push(Path {
-                        x: start_x - 1,
-                        y: start_y,
-                        distance: 1,
-                        came_from: Direction::East,
-                    });
+                    current_x = start_x - 1;
+                    current_y = start_y;
+                    previous_direction = Direction::West;
+                    start_cell.next_direction = Some(Direction::West);
                 }
             }
-        }
-        if start_x < max_x {
+        } else if start_x < max_x {
             if let CellType::Pipe(directions) = self.get_cell(start_x + 1, start_y).cell_type {
                 if directions.contains(&Direction::West) {
-                    paths.push(Path {
-                        x: start_x + 1,
-                        y: start_y,
-                        distance: 1,
-                        came_from: Direction::West,
-                    });
+                    current_x = start_x + 1;
+                    current_y = start_y;
+                    previous_direction = Direction::East;
+                    start_cell.next_direction = Some(Direction::East);
                 }
             }
-        }
-
-        if start_y > 0 {
+        } else if start_y > 0 {
             if let CellType::Pipe(directions) = self.get_cell(start_x, start_y - 1).cell_type {
                 if directions.contains(&Direction::South) {
-                    paths.push(Path {
-                        x: start_x,
-                        y: start_y - 1,
-                        distance: 1,
-                        came_from: Direction::South,
-                    });
+                    current_x = start_x;
+                    current_y = start_y - 1;
+                    previous_direction = Direction::North;
+                    start_cell.next_direction = Some(Direction::North);
                 }
             }
-        }
-        if start_y < max_y {
+        } else if start_y < max_y {
             if let CellType::Pipe(directions) = self.get_cell(start_x, start_y + 1).cell_type {
                 if directions.contains(&Direction::North) {
-                    paths.push(Path {
-                        x: start_x,
-                        y: start_y + 1,
-                        distance: 1,
-                        came_from: Direction::North,
-                    });
+                    current_x = start_x;
+                    current_y = start_y + 1;
+                    previous_direction = Direction::South;
+                    start_cell.next_direction = Some(Direction::South);
                 }
             }
         }
         let mut max_distance = 0;
         'outer: loop {
-            for path in &mut paths {
-                if self.next(path).is_none() {
-                    max_distance = path.distance;
-                    break 'outer;
+            let current_cell = self.get_cell_mut(current_x, current_y);
+            if current_cell.distance_calculated {
+                break 'outer;
+            }
+            distance_travelled += 1;
+            current_cell.distance = distance_travelled;
+            current_cell.distance_calculated = true;
+            next_direction = current_cell.set_previous_direction(previous_direction);
+            clockwise_quarter_turns += previous_direction.clockwise_quarter_turns(&next_direction);
+            previous_direction = next_direction;
+            match next_direction {
+                Direction::North => {
+                    if current_y > 0 {
+                        current_y -= 1;
+                    } else {
+                        break 'outer;
+                    }
+                }
+                Direction::East => {
+                    if current_x < max_x {
+                        current_x += 1;
+                    } else {
+                        break 'outer;
+                    }
+                }
+                Direction::South => {
+                    if current_y < max_y {
+                        current_y += 1;
+                    } else {
+                        break 'outer;
+                    }
+                }
+                Direction::West => {
+                    if current_x > 0 {
+                        current_x -= 1;
+                    } else {
+                        break 'outer;
+                    }
                 }
             }
         }
-        max_distance
+        max_distance = (distance_travelled + 1) / 2;
+        println!("clockwise_quarter_turns: {}", clockwise_quarter_turns);
+        let clockwise = clockwise_quarter_turns == 4;
+        
+        }
     }
 
     pub fn max_distance(&self) -> usize {
@@ -231,3 +297,66 @@ const EXAMPLE_INPUT2: &str = "..F7.
 SJ.L7
 |F--J
 LJ...";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clockwise_quarter_turns() {
+        assert_eq!(
+            Direction::North.clockwise_quarter_turns(&Direction::East),
+            1
+        );
+        assert_eq!(
+            Direction::North.clockwise_quarter_turns(&Direction::West),
+            3
+        );
+        assert_eq!(
+            Direction::East.clockwise_quarter_turns(&Direction::North),
+            3
+        );
+        assert_eq!(
+            Direction::East.clockwise_quarter_turns(&Direction::South),
+            1
+        );
+        assert_eq!(
+            Direction::South.clockwise_quarter_turns(&Direction::East),
+            3
+        );
+        assert_eq!(
+            Direction::South.clockwise_quarter_turns(&Direction::West),
+            1
+        );
+        assert_eq!(
+            Direction::West.clockwise_quarter_turns(&Direction::North),
+            1
+        );
+        assert_eq!(
+            Direction::West.clockwise_quarter_turns(&Direction::South),
+            3
+        );
+    }
+    #[test]
+    fn test_from_string() {
+        let pipe_map = PipeMap::from_string(EXAMPLE_INPUT);
+        assert_eq!(pipe_map.max_x, 4);
+        assert_eq!(pipe_map.max_y, 4);
+        assert_eq!(pipe_map.start_x, 1);
+        assert_eq!(pipe_map.start_y, 1);
+    }
+
+    #[test]
+    fn test_calculate_distances() {
+        let mut pipe_map = PipeMap::from_string(EXAMPLE_INPUT);
+        pipe_map.calculate_distances();
+        assert_eq!(pipe_map.max_distance(), 6);
+    }
+
+    #[test]
+    fn test_calculate_distances2() {
+        let mut pipe_map = PipeMap::from_string(EXAMPLE_INPUT2);
+        pipe_map.calculate_distances();
+        assert_eq!(pipe_map.max_distance(), 24);
+    }
+}
