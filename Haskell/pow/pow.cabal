@@ -22,5 +22,6 @@ executable pow
     -- other-modules:
     -- other-extensions:
     build-depends:    base ^>=4.17.2.1
+    build-depends:    numbers ^>=3000.2.0.2
     hs-source-dirs:   app
     default-language: Haskell2010
